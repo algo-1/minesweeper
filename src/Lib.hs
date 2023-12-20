@@ -12,7 +12,7 @@ import Data.Set (Set, fromList, member)
 import System.Random
 
 data State = Open | Closed
-    deriving (Show)
+    deriving (Show, Eq)
 data Square = Square
     { state :: State
     , isFlagged :: Bool
@@ -25,12 +25,28 @@ type Index = (Int, Int)
 type Board = Array Index Square
 
 data Puzzle = Puzzle
-    { currentBoard :: Board
+    { board :: Board
     , mines :: Set Index
     }
 
 isMine :: Set Index -> Index -> Bool
 isMine mines idx = idx `member` mines
+
+printBoard :: Board -> IO ()
+printBoard board = do
+    let (_, (iLim, jLim)) = bounds board
+    mapM_
+        ( \i -> do
+            mapM_
+                ( \j -> do
+                    let square = board ! (i, j)
+                    let count = neighbourMinesCount square
+                    putStr (if state square == Open then (if count /= 0 then show count ++ " " else " ") else "O ")
+                )
+                [1 .. jLim]
+            putStrLn ""
+        )
+        [1 .. iLim]
 
 defaultSquare :: Square
 defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = 0}
@@ -64,6 +80,9 @@ generateNewPuzzle x y numMines excludedPos =
 runGame :: IO Puzzle -> IO ()
 runGame puzzleIO = do
     Puzzle{..} <- puzzleIO
-    putStrLn "Welcome to minesweeper!"
-    print currentBoard
+    putStrLn "Welcome to Minesweeper!"
+    putStrLn "O means the square is uncovered.\nBlank means no neighbour mines.\nNumbers 1-8 indicates how many neighbouring mines."
+    printBoard board
     print mines
+    let currentBoard = openSquare board (8, 8)
+    printBoard currentBoard
