@@ -77,6 +77,12 @@ generateNewPuzzle x y numMines excludedPos =
             let mines = fromList mineIdxs
             return $ Puzzle (setNeighbourMinesCount mines emptyBoard) mines
 
+-- before calling this method check if index is a mine or flag and take appropriate action
+-- assuming just a regular open index, recursively open all spots with no mine neighbours, if a tile has a mnine neighbour return but leave opened and display the neighbour mines count.
+-- TODO: remove unnecessary part of commentary after implementation & testing?
+openSquare :: Board -> Index -> Board
+openSquare = undefined
+
 runGame :: IO Puzzle -> IO ()
 runGame puzzleIO = do
     Puzzle{..} <- puzzleIO
