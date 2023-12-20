@@ -23,8 +23,6 @@ data Square = Square
 
 type Board = Array (Int, Int) Square
 
--- board n by m, number of mines, fully opened board labelled with num of mine neighbours (0-8) / mine (-1) and game
--- above scrapped in favour of more expressive types
 newtype Puzzle = Puzzle
     { currentBoard :: IO Board
     }
