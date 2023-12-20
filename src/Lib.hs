@@ -15,56 +15,55 @@ data State = Open | Closed
     deriving (Show)
 data Square = Square
     { state :: State
-    , isMine :: Bool
     , isFlagged :: Bool
     , neighbourMinesCount :: Int
     }
     deriving (Show)
 
-type Board = Array (Int, Int) Square
+type Index = (Int, Int)
 
-newtype Puzzle = Puzzle
-    { currentBoard :: IO Board
+type Board = Array Index Square
+
+data Puzzle = Puzzle
+    { currentBoard :: Board
+    , mines :: Set Index
     }
 
+isMine :: Set Index -> Index -> Bool
+isMine mines idx = idx `member` mines
+
 defaultSquare :: Square
-defaultSquare = Square{state = Closed, isMine = False, isFlagged = False, neighbourMinesCount = 0}
+defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = 0}
 
 -- select n distinct random indices from the range that are not equal to the excluded position
-randomIndices :: Int -> (Int, Int) -> ((Int, Int), (Int, Int)) -> IO [(Int, Int)]
+randomIndices :: Int -> Index -> (Index, Index) -> IO [Index]
 randomIndices n excludedPos idxRange = take n . nub . filter (/= excludedPos) . randomRs idxRange <$> newStdGen
 
-allocateMines :: Board -> [(Int, Int)] -> Board
-allocateMines emptyBoard randomIdxs =
-    emptyBoard // [(idx, (emptyBoard ! idx){isMine = True}) | idx <- randomIdxs]
-
 -- we only count the number of neighbour mines for non-mine squares
-setNeighbourMinesCount :: Set (Int, Int) -> Board -> Board
+setNeighbourMinesCount :: Set Index -> Board -> Board
 setNeighbourMinesCount mines board =
     board // [(idx, (board ! idx){neighbourMinesCount = getCount idx}) | idx <- range $ bounds board, not $ idx `member` mines]
   where
     coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)]
-    getCount (i, j) = sum [if (x + i, y + j) `member` mines then 1 else 0 | (x, y) <- coords, inBound (x + i, y + j)]
+    getCount (i, j) = sum [if isMine mines (x + i, y + j) then 1 else 0 | (x, y) <- coords, inBound (x + i, y + j)]
     inBound (a, b) =
         let (lower, upper) = bounds board
          in (a >= fst lower && b >= snd lower) && (a <= fst upper && b <= snd upper)
 
-createGameBoard :: Int -> Int -> Int -> (Int, Int) -> IO Board
-createGameBoard x y numMines excludedPos =
+createBoard :: Int -> Int -> Square -> Board
+createBoard x y value = array ((1, 1), (x, y)) [((i, j), value) | i <- [1 .. x], j <- [1 .. y]]
+
+generateNewPuzzle :: Int -> Int -> Int -> Index -> IO Puzzle
+generateNewPuzzle x y numMines excludedPos =
     let emptyBoard = createBoard x y defaultSquare
      in do
             mineIdxs <- randomIndices numMines excludedPos ((1, 1), (x, y))
             let mines = fromList mineIdxs
-            return $ setNeighbourMinesCount mines $ allocateMines emptyBoard mineIdxs
+            return $ Puzzle (setNeighbourMinesCount mines emptyBoard) mines
 
-createBoard :: Int -> Int -> Square -> Board
-createBoard x y value = array ((1, 1), (x, y)) [((i, j), value) | i <- [1 .. x], j <- [1 .. y]]
-
-generateNewPuzzle :: Int -> Int -> Int -> (Int, Int) -> Puzzle
-generateNewPuzzle x y numMines excludedPos = Puzzle{currentBoard = createGameBoard x y numMines excludedPos}
-
-runGame :: Puzzle -> IO ()
-runGame (Puzzle{..}) = do
+runGame :: IO Puzzle -> IO ()
+runGame puzzleIO = do
+    Puzzle{..} <- puzzleIO
     putStrLn "Welcome to minesweeper!"
-    board <- currentBoard
-    print board
+    print currentBoard
+    print mines
