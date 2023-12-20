@@ -30,7 +30,7 @@ newtype Puzzle = Puzzle
 defaultSquare :: Square
 defaultSquare = Square{state = Closed, isMine = False, isFlagged = False, neighbourMinesCount = 0}
 
--- select n distinct random indices from the range that is not equal to the excluded position
+-- select n distinct random indices from the range that are not equal to the excluded position
 randomIndices :: Int -> (Int, Int) -> ((Int, Int), (Int, Int)) -> IO [(Int, Int)]
 randomIndices n excludedPos idxRange = take n . nub . filter (/= excludedPos) . randomRs idxRange <$> newStdGen
 
