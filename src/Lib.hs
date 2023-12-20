@@ -34,7 +34,7 @@ isMine mines idx = idx `member` mines
 
 printBoard :: Board -> IO ()
 printBoard board = do
-    let (_, (iLim, jLim)) = bounds board
+    let (_, (iMax, jMax)) = bounds board
     mapM_
         ( \i -> do
             mapM_
@@ -43,10 +43,10 @@ printBoard board = do
                     let count = neighbourMinesCount square
                     putStr (if state square == Open then (if count /= 0 then show count ++ " " else " ") else "O ")
                 )
-                [1 .. jLim]
+                [1 .. jMax]
             putStrLn ""
         )
-        [1 .. iLim]
+        [1 .. iMax]
 
 defaultSquare :: Square
 defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = 0}
