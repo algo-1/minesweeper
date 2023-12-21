@@ -79,6 +79,7 @@ coords :: [Index]
 coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)]
 
 -- select n distinct random indices from the range that are not equal to the excluded position
+-- provided that the range is large enough, if not all indices in the range will be returned.
 randomIndices :: Int -> Index -> (Index, Index) -> IO [Index]
 randomIndices n excludedPos idxRange = take n . nub . filter (/= excludedPos) . randomRs idxRange <$> newStdGen
 
