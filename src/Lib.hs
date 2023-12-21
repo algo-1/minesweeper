@@ -9,7 +9,7 @@ module Lib (
 
 import Data.Array (Array, array, bounds, range, (!), (//))
 import Data.List (foldl', nub)
-import Data.Set (Set, empty, fromList, insert, member)
+import Data.Set (Set, fromList, member)
 import System.Random
 import Text.Read (readMaybe)
 
@@ -100,7 +100,7 @@ generateNewPuzzle x y numMines excludedPos =
      in do
             mineIdxs <- randomIndices numMines excludedPos ((1, 1), (x, y))
             let mines = fromList mineIdxs
-            return $ Puzzle (openSquare excludedPos mines empty $ setNeighbourMinesCount mines emptyBoard) mines
+            return $ Puzzle (openSquare excludedPos mines $ setNeighbourMinesCount mines emptyBoard) mines
 
 hasNoMineNeighbours :: Index -> Board -> Bool
 hasNoMineNeighbours idx board = neighbourMinesCount (board ! idx) == 0
@@ -113,16 +113,15 @@ inBound (a, b) board =
 -- before calling this method check if index is a mine or flag and take appropriate action
 -- assuming just a regular open index, recursively open all spots with no mine neighbours, if a tile has a mnine neighbour return but leave opened and display the neighbour mines count.
 -- TODO: remove unnecessary part of commentary after implementation & testing?
-openSquare :: Index -> Set Index -> Set Index -> Board -> Board
-openSquare (i, j) mines visited board =
+openSquare :: Index -> Set Index -> Board -> Board
+openSquare (i, j) mines board =
     let new_board = board // [((i, j), (board ! (i, j)){state = Open})]
-     in let new_visited = insert (i, j) visited
-         in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && not ((x + i, y + j) `member` new_visited)]
-             in if hasNoMineNeighbours (i, j) new_board
-                    then foldl' (f new_visited) new_board neighbours
-                    else new_board
+     in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && state (new_board ! (x + i, y + j)) == Closed]
+         in if hasNoMineNeighbours (i, j) new_board
+                then foldl' f new_board neighbours
+                else new_board
   where
-    f visited' board' idx = openSquare idx mines visited' board'
+    f board' idx = openSquare idx mines board'
 
 -- only works for closed squares
 toggleFlagSquare :: Index -> Board -> Board
@@ -162,7 +161,7 @@ gameWon :: Board -> Set Index -> Bool
 gameWon board mines = all (== Open) [state (board ! idx) | idx <- range $ bounds board, not $ isMine mines idx]
 
 play :: Move -> Board -> Set Index -> Index -> Board
-play OpenSquare board mines idx = openSquare idx mines empty board
+play OpenSquare board mines idx = openSquare idx mines board
 play ToggleFlag board _ idx = toggleFlagSquare idx board
 
 loop :: Board -> Set Index -> IO ()
