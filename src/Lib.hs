@@ -6,10 +6,12 @@ module Lib (
 ) where
 
 -- I would prefer to use qualified imports but there is a bug with the formatter that changes "import qualified <module> as <name> to "import <module> qualified as <name>" and this gives compilation errors. Relevant github issue --> https://github.com/haskell/haskell-language-server/issues/3439
+
 import Data.Array (Array, array, bounds, range, (!), (//))
 import Data.List (nub)
 import Data.Set (Set, empty, fromList, insert, member)
 import System.Random
+import Text.Read (readMaybe)
 
 data State = Open | Closed
     deriving (Show, Eq)
@@ -114,14 +116,50 @@ openSquare (i, j) mines visited board =
   where
     f visited' board' idx = openSquare idx mines visited' board'
 
+readTuple :: IO (Int, Int)
+readTuple = do
+    putStrLn "Enter the first integer:"
+    xStr <- getLine
+    let mx = readMaybe xStr :: Maybe Int
+
+    putStrLn "Enter the second integer:"
+    yStr <- getLine
+    let my = readMaybe yStr :: Maybe Int
+
+    case (mx, my) of
+        (Just x, Just y) -> return (x, y)
+        _ -> do
+            putStrLn "Invalid input. Please enter valid integers."
+            readTuple
+
+loop :: Board -> Set Index -> IO ()
+loop board mines = do
+    idx <- readTuple
+    if idx == (-1, -1)
+        then return ()
+        else
+            if not $ isMine mines idx
+                then do
+                    let new_board = openSquare idx mines empty board
+                    printBoard new_board
+                    putStrLn ""
+                    loop new_board mines
+                else do
+                    print "Game over! you picked a mine!"
+                    return ()
+
 runGame :: IO Puzzle -> IO ()
 runGame puzzleIO = do
     Puzzle{..} <- puzzleIO
     putStrLn "Welcome to Minesweeper!"
-    putStrLn "O means the square is uncovered.\nBlank means no neighbour mines.\nNumbers 1-8 indicates how many neighbouring mines."
+    putStrLn "O means the square is not opened.\nBlank means no neighbour mines.\nNumbers 1-8 indicates how many neighbouring mines."
+    print "Debug board"
     printBoardDebug board
+    putStrLn ""
+    print "Board after first click!"
     printBoard board
+    putStrLn ""
+    print "Mines Below"
     print mines
-    print board
-    let sq = (10, 8)
-    if isMine mines sq then printBoard $ openSquare sq mines empty board else print "Game over! you picked a mine!"
+    putStrLn ""
+    loop board mines
