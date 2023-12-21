@@ -124,4 +124,4 @@ runGame puzzleIO = do
     print mines
     print board
     let sq = (10, 8)
-    if isMine mines sq then printBoard $ openSquare sq mines empty board else print "You picked a mine!"
+    if isMine mines sq then printBoard $ openSquare sq mines empty board else print "Game over! you picked a mine!"
