@@ -31,6 +31,9 @@ data Puzzle = Puzzle
     , mines :: Set Index
     }
 
+data Move = OpenSquare | ToggleFlag
+    deriving (Show, Read)
+
 isMine :: Set Index -> Index -> Bool
 isMine mines idx = idx `member` mines
 
@@ -43,15 +46,17 @@ printBoard board = do
                 ( \j -> do
                     let square = board ! (i, j)
                     let count = neighbourMinesCount square
-                    putStr (if state square == Open then (if count /= 0 then show count ++ " " else "  ") else "O ")
+                    case state square of
+                        Open -> putStr (if count /= 0 then show count ++ " " else "  ")
+                        Closed -> putStr (if isFlagged square then "F " else "O ")
                 )
                 [1 .. jMax]
             putStrLn ""
         )
         [1 .. iMax]
 
-printBoardDebug :: Board -> IO ()
-printBoardDebug board = do
+printBoardDebug :: Board -> Set Index -> IO ()
+printBoardDebug board mines = do
     let (_, (iMax, jMax)) = bounds board
     mapM_
         ( \i -> do
@@ -59,7 +64,7 @@ printBoardDebug board = do
                 ( \j -> do
                     let square = board ! (i, j)
                     let count = neighbourMinesCount square
-                    putStr $ show count ++ " "
+                    (if isMine mines (i, j) then putStr "X " else putStr $ show count ++ " ")
                 )
                 [1 .. jMax]
             putStrLn ""
@@ -116,6 +121,12 @@ openSquare (i, j) mines visited board =
   where
     f visited' board' idx = openSquare idx mines visited' board'
 
+-- only works for closed squares
+toggleFlagSquare :: Index -> Board -> Board
+toggleFlagSquare idx board
+    | state (board ! idx) == Closed = board // [(idx, (board ! idx){isFlagged = not $ isFlagged (board ! idx)})]
+    | otherwise = board
+
 readTuple :: IO (Int, Int)
 readTuple = do
     putStrLn "Enter the first integer:"
@@ -132,29 +143,61 @@ readTuple = do
             putStrLn "Invalid input. Please enter valid integers."
             readTuple
 
+readMove :: IO Move
+readMove = do
+    putStrLn "Enter the type of Move (OpenSquare | ToggleFlag):"
+    xStr <- getLine
+    let move = readMaybe xStr :: Maybe Move
+
+    case move of
+        (Just m) -> return m
+        _ -> do
+            putStrLn "Invalid input. Please enter a valid move."
+            readMove
+
 gameWon :: Board -> Set Index -> Bool
 gameWon board mines = all (== Open) [state (board ! idx) | idx <- range $ bounds board, not $ isMine mines idx]
 
+play :: Move -> Board -> Set Index -> Index -> Board
+play OpenSquare board mines idx = openSquare idx mines empty board
+play ToggleFlag board _ idx = toggleFlagSquare idx board
+
 loop :: Board -> Set Index -> IO ()
 loop board mines = do
+    move <- readMove
     idx <- readTuple
     if idx == (-1, -1)
-        then return ()
-        else
-            if not $ isMine mines idx
-                then do
-                    let new_board = openSquare idx mines empty board
-                    printBoard new_board
-                    if gameWon new_board mines
-                        then do
-                            print "Congratulations! You won!"
-                            return ()
-                        else do
-                            putStrLn ""
-                            loop new_board mines
-                else do
-                    print "Game over! you picked a mine!"
-                    return ()
+        then do
+            print "You have successfully quit the game."
+            return ()
+        else case move of
+            OpenSquare ->
+                -- do not do anything if user tries to open a square that is open or flagged
+                ( if isFlagged (board ! idx) || state (board ! idx) == Open
+                    then loop board mines
+                    else
+                        ( if not $ isMine mines idx
+                            then do
+                                let new_board = play move board mines idx
+                                printBoard new_board
+                                if gameWon new_board mines
+                                    then do
+                                        print "Congratulations! You won!"
+                                        return ()
+                                    else do
+                                        putStrLn ""
+                                        loop new_board mines
+                            else do
+                                print "Game over! you picked a mine!"
+                                printBoardDebug board mines
+                                return ()
+                        )
+                )
+            ToggleFlag -> do
+                let new_board = play move board mines idx
+                printBoard new_board
+                putStrLn ""
+                loop new_board mines
 
 runGame :: IO Puzzle -> IO ()
 runGame puzzleIO = do
@@ -162,7 +205,7 @@ runGame puzzleIO = do
     putStrLn "Welcome to Minesweeper!"
     putStrLn "O means the square is not opened.\nBlank means no neighbour mines.\nNumbers 1-8 indicates how many neighbouring mines."
     print "Debug board"
-    printBoardDebug board
+    printBoardDebug board mines
     putStrLn ""
     print "Board after first click!"
     printBoard board
