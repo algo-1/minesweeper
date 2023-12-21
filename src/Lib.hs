@@ -132,6 +132,9 @@ readTuple = do
             putStrLn "Invalid input. Please enter valid integers."
             readTuple
 
+gameWon :: Board -> Set Index -> Bool
+gameWon board mines = all (== Open) [state (board ! idx) | idx <- range $ bounds board, not $ isMine mines idx]
+
 loop :: Board -> Set Index -> IO ()
 loop board mines = do
     idx <- readTuple
@@ -142,8 +145,13 @@ loop board mines = do
                 then do
                     let new_board = openSquare idx mines empty board
                     printBoard new_board
-                    putStrLn ""
-                    loop new_board mines
+                    if gameWon new_board mines
+                        then do
+                            print "Congratulations! You won!"
+                            return ()
+                        else do
+                            putStrLn ""
+                            loop new_board mines
                 else do
                     print "Game over! you picked a mine!"
                     return ()
