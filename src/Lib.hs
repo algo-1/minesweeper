@@ -174,7 +174,10 @@ loop board mines = do
             OpenSquare ->
                 -- do not do anything if user tries to open a square that is open or flagged
                 ( if isFlagged (board ! idx) || state (board ! idx) == Open
-                    then loop board mines
+                    then do
+                        printBoard board
+                        putStrLn ""
+                        loop board mines
                     else
                         ( if not $ isMine mines idx
                             then do
