@@ -91,8 +91,8 @@ generateNewPuzzle x y numMines excludedPos =
             let mines = fromList mineIdxs
             return $ Puzzle (openSquare excludedPos mines empty $ setNeighbourMinesCount mines emptyBoard) mines
 
-hasNoMineNeighbours :: [Index] -> Set Index -> Bool
-hasNoMineNeighbours neighbours mines = all (\idx -> not (idx `member` mines)) neighbours
+hasNoMineNeighbours :: Index -> Board -> Bool
+hasNoMineNeighbours idx board = neighbourMinesCount (board ! idx) == 0
 
 inBound :: Index -> Board -> Bool
 inBound (a, b) board =
@@ -107,8 +107,8 @@ openSquare (i, j) mines visited board =
     let new_board = board // [((i, j), (board ! (i, j)){state = Open})]
      in let new_visited = insert (i, j) visited
          in let coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)] :: [Index]
-             in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not ((x + i, y + j) `member` new_visited)]
-                 in if hasNoMineNeighbours neighbours mines
+             in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && not ((x + i, y + j) `member` new_visited)]
+                 in if hasNoMineNeighbours (i, j) new_board
                         then foldl (f new_visited) new_board neighbours
                         else new_board
   where
