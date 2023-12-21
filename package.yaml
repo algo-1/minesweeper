@@ -39,6 +39,7 @@ library:
     - array
     - random
     - containers
+    - unordered-containers
 
 executables:
   minesweeper-exe:

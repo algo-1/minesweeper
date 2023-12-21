@@ -38,6 +38,7 @@ library
     , base >=4.7 && <5
     , containers
     , random
+    , unordered-containers
   default-language: Haskell2010
 
 executable minesweeper-exe

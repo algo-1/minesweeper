@@ -8,8 +8,8 @@ module Lib (
 -- I would prefer to use qualified imports but there is a bug with the formatter that changes "import qualified <module> as <name> to "import <module> qualified as <name>" and this gives compilation errors. Relevant github issue --> https://github.com/haskell/haskell-language-server/issues/3439
 
 import Data.Array (Array, array, bounds, range, (!), (//))
+import Data.HashSet (HashSet, fromList, member)
 import Data.List (foldl', nub)
-import Data.Set (Set, fromList, member)
 import System.Random
 import Text.Read (readMaybe)
 
@@ -28,13 +28,13 @@ type Board = Array Index Square
 
 data Puzzle = Puzzle
     { board :: Board
-    , mines :: Set Index
+    , mines :: HashSet Index
     }
 
 data Move = OpenSquare | ToggleFlag
     deriving (Show, Read)
 
-isMine :: Set Index -> Index -> Bool
+isMine :: HashSet Index -> Index -> Bool
 isMine mines idx = idx `member` mines
 
 printBoard :: Board -> IO ()
@@ -55,7 +55,7 @@ printBoard board = do
         )
         [1 .. iMax]
 
-printBoardDebug :: Board -> Set Index -> IO ()
+printBoardDebug :: Board -> HashSet Index -> IO ()
 printBoardDebug board mines = do
     let (_, (iMax, jMax)) = bounds board
     mapM_
@@ -84,7 +84,7 @@ randomIndices :: Int -> Index -> (Index, Index) -> IO [Index]
 randomIndices n excludedPos idxRange = take n . nub . filter (/= excludedPos) . randomRs idxRange <$> newStdGen
 
 -- we only count the number of neighbour mines for non-mine squares
-setNeighbourMinesCount :: Set Index -> Board -> Board
+setNeighbourMinesCount :: HashSet Index -> Board -> Board
 setNeighbourMinesCount mines board =
     board // [(idx, (board ! idx){neighbourMinesCount = getCount idx}) | idx <- range $ bounds board, not $ idx `member` mines]
   where
@@ -113,7 +113,7 @@ inBound (a, b) board =
 -- before calling this method check if index is a mine or flag and take appropriate action
 -- assuming just a regular open index, recursively open all spots with no mine neighbours, if a tile has a mnine neighbour return but leave opened and display the neighbour mines count.
 -- TODO: remove unnecessary part of commentary after implementation & testing?
-openSquare :: Index -> Set Index -> Board -> Board
+openSquare :: Index -> HashSet Index -> Board -> Board
 openSquare (i, j) mines board =
     let new_board = board // [((i, j), (board ! (i, j)){state = Open})]
      in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && state (new_board ! (x + i, y + j)) == Closed]
@@ -157,14 +157,14 @@ readMove = do
             putStrLn "Invalid input. Please enter a valid move."
             readMove
 
-gameWon :: Board -> Set Index -> Bool
+gameWon :: Board -> HashSet Index -> Bool
 gameWon board mines = all (== Open) [state (board ! idx) | idx <- range $ bounds board, not $ isMine mines idx]
 
-play :: Move -> Board -> Set Index -> Index -> Board
+play :: Move -> Board -> HashSet Index -> Index -> Board
 play OpenSquare board mines idx = openSquare idx mines board
 play ToggleFlag board _ idx = toggleFlagSquare idx board
 
-loop :: Board -> Set Index -> IO ()
+loop :: Board -> HashSet Index -> IO ()
 loop board mines = do
     move <- readMove
     idx <- readTuple
