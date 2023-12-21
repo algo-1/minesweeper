@@ -74,6 +74,10 @@ printBoardDebug board mines = do
 defaultSquare :: Square
 defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = 0}
 
+-- the 8 directions
+coords :: [Index]
+coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)]
+
 -- select n distinct random indices from the range that are not equal to the excluded position
 randomIndices :: Int -> Index -> (Index, Index) -> IO [Index]
 randomIndices n excludedPos idxRange = take n . nub . filter (/= excludedPos) . randomRs idxRange <$> newStdGen
@@ -83,7 +87,6 @@ setNeighbourMinesCount :: Set Index -> Board -> Board
 setNeighbourMinesCount mines board =
     board // [(idx, (board ! idx){neighbourMinesCount = getCount idx}) | idx <- range $ bounds board, not $ idx `member` mines]
   where
-    coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)]
     getCount (i, j) = sum [if isMine mines (x + i, y + j) then 1 else 0 | (x, y) <- coords, inBound (x + i, y + j) board]
 
 createBoard :: Int -> Int -> Square -> Board
@@ -113,11 +116,10 @@ openSquare :: Index -> Set Index -> Set Index -> Board -> Board
 openSquare (i, j) mines visited board =
     let new_board = board // [((i, j), (board ! (i, j)){state = Open})]
      in let new_visited = insert (i, j) visited
-         in let coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)] :: [Index]
-             in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && not ((x + i, y + j) `member` new_visited)]
-                 in if hasNoMineNeighbours (i, j) new_board
-                        then foldl' (f new_visited) new_board neighbours
-                        else new_board
+         in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && not ((x + i, y + j) `member` new_visited)]
+             in if hasNoMineNeighbours (i, j) new_board
+                    then foldl' (f new_visited) new_board neighbours
+                    else new_board
   where
     f visited' board' idx = openSquare idx mines visited' board'
 
