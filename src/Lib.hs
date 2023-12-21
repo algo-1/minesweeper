@@ -8,7 +8,7 @@ module Lib (
 -- I would prefer to use qualified imports but there is a bug with the formatter that changes "import qualified <module> as <name> to "import <module> qualified as <name>" and this gives compilation errors. Relevant github issue --> https://github.com/haskell/haskell-language-server/issues/3439
 
 import Data.Array (Array, array, bounds, range, (!), (//))
-import Data.List (nub)
+import Data.List (foldl', nub)
 import Data.Set (Set, empty, fromList, insert, member)
 import System.Random
 import Text.Read (readMaybe)
@@ -111,7 +111,7 @@ openSquare (i, j) mines visited board =
          in let coords = [(0, 1), (0, -1), (1, 0), (-1, 0), (-1, 1), (1, 1), (-1, -1), (1, -1)] :: [Index]
              in let neighbours = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) new_board && not (isMine mines (x + i, y + j)) && not ((x + i, y + j) `member` new_visited)]
                  in if hasNoMineNeighbours (i, j) new_board
-                        then foldl (f new_visited) new_board neighbours
+                        then foldl' (f new_visited) new_board neighbours
                         else new_board
   where
     f visited' board' idx = openSquare idx mines visited' board'
