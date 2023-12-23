@@ -72,7 +72,7 @@ printBoardDebug board mines = do
         [1 .. iMax]
 
 defaultSquare :: Square
-defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = 0}
+defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = -1}
 
 -- the 8 directions
 coords :: [Index]
