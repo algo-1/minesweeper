@@ -64,7 +64,9 @@ printBoardDebug board mines = do
                 ( \j -> do
                     let square = board ! (i, j)
                     let count = neighbourMinesCount square
-                    (if isMine mines (i, j) then putStr "X " else putStr $ show count ++ " ")
+                    case state square of
+                        Open -> putStr (if count /= 0 then show count ++ " " else "  ")
+                        Closed -> (if isMine mines (i, j) then putStr "X " else putStr $ show count ++ " ")
                 )
                 [1 .. jMax]
             putStrLn ""
