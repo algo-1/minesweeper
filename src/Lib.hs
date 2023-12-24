@@ -19,6 +19,7 @@ data Square = Square
     { state :: State
     , isFlagged :: Bool
     , neighbourMinesCount :: Int
+    , isSolverFlagged :: Bool
     }
     deriving (Show)
 
@@ -48,7 +49,7 @@ printBoard board = do
                     let count = neighbourMinesCount square
                     case state square of
                         Open -> putStr (if count /= 0 then show count ++ " " else "  ")
-                        Closed -> putStr (if isFlagged square then "F " else "O ")
+                        Closed -> putStr (if isFlagged square || isSolverFlagged square then "F " else "O ")
                 )
                 [1 .. jMax]
             putStrLn ""
@@ -74,7 +75,7 @@ printBoardDebug board mines = do
         [1 .. iMax]
 
 defaultSquare :: Square
-defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = -1}
+defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = -1, isSolverFlagged = False}
 
 -- the 8 directions
 coords :: [Index]
@@ -162,14 +163,79 @@ readMove = do
 gameWon :: Board -> HashSet Index -> Bool
 gameWon board mines = all (== Open) [state (board ! idx) | idx <- range $ bounds board, not $ isMine mines idx]
 
+closedNeighbours :: Board -> Index -> [Index]
+closedNeighbours board (i, j) = [(x + i, y + j) | (x, y) <- coords, inBound (x + i, y + j) board && state (board ! (x + i, y + j)) == Closed]
+
+unflaggedClosedNeighbours :: Board -> Index -> [Index]
+unflaggedClosedNeighbours board idx = filter (\closedNeighIdx -> not $ isSolverFlagged (board ! closedNeighIdx)) (closedNeighbours board idx)
+
+isNumberedSquare :: Board -> Index -> Bool
+isNumberedSquare board idx = state (board ! idx) == Open && neighbourMinesCount (board ! idx) > 0
+
+-- return one index from the trivially open indices, where a trivially open index (x, y) is one where
+--  there exists a neighbouring index (i, j) that has a neighbouring mine count == the number of its neighbours that are flagged
+triviallyOpen :: Board -> Maybe Index
+triviallyOpen board =
+    if not (null xs) then Just (head xs) else Nothing
+  where
+    xs = concatMap (unflaggedClosedNeighbours board) allUnflaggedClosedNeighboursSafe
+    allUnflaggedClosedNeighboursSafe = [idx | idx <- range $ bounds board, isNumberedSquare board idx && neighbourMinesCount (board ! idx) == numFlaggedNeighbours idx]
+    numFlaggedNeighbours (i, j) = sum $ map (\idx -> if isSolverFlagged (board ! idx) then 1 else 0) (closedNeighbours board (i, j))
+
+-- flag all closed neighbours of (i, j) where number of neighbouring mines of (i, j) == number of closedNeighbours
+trivialFlags :: Board -> Board
+trivialFlags board = board // [(idx, (board ! idx){isSolverFlagged = True}) | idx <- concatMap (closedNeighbours board) flagNeighbours]
+  where
+    flagNeighbours = [idx | idx <- range $ bounds board, isNumberedSquare board idx && neighbourMinesCount (board ! idx) == length (closedNeighbours board idx)]
+
+-- returns the index of the first cloosed square it finds that is definitely not a mine or the flagged board
+-- note flagged here is set using isSolverFlagged no number of neighbours because we cannot trust the flags on the board because the user can flag a non-mine before triggering the solver
+findTrivialSafeSquare :: Board -> (Maybe Index, Board)
+findTrivialSafeSquare board =
+    let flagged_board = trivialFlags board in (triviallyOpen flagged_board, flagged_board)
+
+-- used when the solver does not find an unambigous play
+-- TODO: could be helpful to use info about number of remaining mines cite https://dash.harvard.edu/bitstream/handle/1/14398552/BECERRA-SENIORTHESIS-2015.pdf, be carefula about the correct probabilities
+-- solver only accesses neighbour count of open squares as it would be cheating to use that information from closed squares
+-- TODO: returns index of least "dangerous" square based on probabilities, corner, edge, inner heuristic ?
+probabilisticSolver :: Board -> StdGen -> Index
+probabilisticSolver board g =
+    let potentialSafeSquares = [idx | idx <- range $ bounds board, state (board ! idx) == Closed && not (isSolverFlagged (board ! idx))]
+        (list_idx, _) = randomR (0, length potentialSafeSquares - 1) g
+     in potentialSafeSquares !! list_idx
+
+-- csp Solver
+-- TODO: use csp, efficient algorithm & reasonable heuristics to get a safe square, if still cannot, use probabilities from solutions
+-- TODO: retain useful info in board for next play? more record fields? / csp data type ++ ?
+cspSolver :: Board -> Index
+cspSolver = undefined
+
+solver :: Board -> StdGen -> (Index, Board)
+solver board g = case findTrivialSafeSquare board of
+    (Just idx, flagged_board) -> (idx, flagged_board)
+    (Nothing, flagged_board) -> (probabilisticSolver flagged_board g, flagged_board)
+
 play :: Move -> Board -> HashSet Index -> Index -> Board
 play OpenSquare board mines idx = openSquare idx mines board
 play ToggleFlag board _ idx = toggleFlagSquare idx board
 
 loop :: Board -> HashSet Index -> IO ()
 loop board mines = do
-    move <- readMove
-    idx <- readTuple
+    -- move <- readMove -- from user via cli
+    -- idx <- readTuple -- from user via cli
+    let move = OpenSquare -- solver only opens square
+    g <- newStdGen
+    let (idx, flagged_board) = solver board g
+    print "flagged board"
+    printBoard flagged_board
+    print [(index, isSolverFlagged (flagged_board ! index)) | index <- range $ bounds flagged_board, state (flagged_board ! index) == Closed && not (isSolverFlagged (flagged_board ! index))] -- potentially safe squares
+    print "triviallyOpen"
+    print $ triviallyOpen flagged_board
+    print "probabilistic solver"
+    print $ probabilisticSolver flagged_board g
+    putStrLn ""
+    print idx
+    putStrLn ""
     if idx == (-1, -1)
         then do
             print "You have successfully quit the game."
@@ -220,4 +286,7 @@ runGame puzzleIO = do
     print "Mines Below"
     print mines
     putStrLn ""
-    loop board mines
+    if gameWon board mines
+        then do
+            print "Congratulations! You won with your first move!"
+        else loop board mines
