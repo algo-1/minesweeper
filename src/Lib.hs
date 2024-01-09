@@ -9,9 +9,6 @@ module Lib (
 )
 where
 
--- I would prefer to use qualified imports but there is a bug with the formatter that changes "import qualified <module> as <name> to "import <module> qualified as <name>" and this gives compilation errors. Relevant github issue --> https://github.com/haskell/haskell-language-server/issues/3439
--- solved with language extension
-
 import Control.Monad (replicateM)
 import Data.Array (Array, array, bounds, range, (!), (//))
 import Data.Foldable (find)
