@@ -308,8 +308,33 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
             (lowestIdx, _) = foldl1 (\acc@(_, prob1) (idx2, prob2) -> if prob1 < prob2 then acc else (idx2, prob2)) probabilities
          in lowestIdx
 
-backtrack :: Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
-backtrack board variables constraints domains = undefined
+backtrack :: Board -> [Variable] -> [Constraint] -> Domains -> CSPSolution -> [CSPSolution]
+backtrack board variables constraints domains assignment
+    | allVariablesAssigned assignment variables = [assignment]
+    | otherwise =
+        let selectedVar = selectVariable domains constraints
+            unassignedVariables = [var | var <- variables, var `notElem` map fst assignment]
+            orderedValues = lcvHeuristic selectedVar unassignedVariables domains board
+         in tryValues selectedVar orderedValues assignment
+  where
+    tryValues :: Variable -> [Value] -> CSPSolution -> [CSPSolution]
+    tryValues _ [] _ = []
+    tryValues var (value : remainingValues) asnmt =
+        if checkValue var value asnmt
+            then
+                let newAssignment = (var, value) : asnmt
+                    (inferenceAssignments, updatedDomains) = ac3 constraints domains
+                    result = backtrack board variables constraints updatedDomains (inferenceAssignments ++ newAssignment)
+                 in result ++ tryValues var remainingValues asnmt
+            else tryValues var remainingValues asnmt
+
+    checkValue :: Variable -> Value -> CSPSolution -> Bool
+    checkValue var value sol =
+        let ff = flip checkConstraint ((var, value) : sol)
+         in all ff constraints
+
+ac3 :: [Constraint] -> Domains -> (CSPSolution, Domains)
+ac3 constraints domains = undefined
 
 mrvHeuristic :: Domains -> [Variable]
 mrvHeuristic domain =
@@ -366,8 +391,8 @@ isConsistent :: CSPSolution -> [Constraint] -> Bool
 isConsistent assignment = all (`checkConstraint` assignment)
 
 -- Function to update domains based on the current assignment
-updateDomains :: CSPSolution -> Map Variable [Value] -> Map Variable [Value]
-updateDomains assignment domains = foldr (\(var, val) acc -> Map.adjust (filter (/= val)) var acc) domains assignment
+-- updateDomains :: CSPSolution -> Map Variable [Value] -> Map Variable [Value]
+-- updateDomains assignment domains = foldr (\(var, val) acc -> Map.adjust (filter (/= val)) var acc) domains assignment
 
 allVariablesAssigned :: CSPSolution -> [Variable] -> Bool
 allVariablesAssigned assignment variables = length assignment == length variables
@@ -415,7 +440,7 @@ cspSolver board =
 
         variables = indexVariables ++ Map.keys sumVariablesWithDomains
 
-        solutions = map filterIndexVars (backtrack board variables binaryConstraints domains)
+        solutions = map filterIndexVars (backtrack board variables binaryConstraints domains [])
 
         filterIndexVars sol = [(var, val) | (var, val) <- sol, isIndexVar var]
 
