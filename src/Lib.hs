@@ -1,25 +1,37 @@
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Lib (
     generateNewPuzzle,
     runGame,
-) where
+)
+where
 
 -- I would prefer to use qualified imports but there is a bug with the formatter that changes "import qualified <module> as <name> to "import <module> qualified as <name>" and this gives compilation errors. Relevant github issue --> https://github.com/haskell/haskell-language-server/issues/3439
+-- solved with language extension
 
+import Control.Monad (replicateM)
 import Data.Array (Array, array, bounds, range, (!), (//))
+import Data.Foldable (find)
 import Data.HashSet (HashSet, fromList, member)
 import Data.List (foldl', nub)
+import Data.Map (Map)
+import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import System.Random
 import Text.Read (readMaybe)
 
 data State = Open | Closed
     deriving (Show, Eq)
+
 data Square = Square
     { state :: State
     , isFlagged :: Bool
     , neighbourMinesCount :: Int
     , isSolverFlagged :: Bool
+    , isSolverSafe :: Bool
     }
     deriving (Show)
 
@@ -34,6 +46,31 @@ data Puzzle = Puzzle
 
 data Move = OpenSquare | ToggleFlag
     deriving (Show, Read)
+
+type IndexVarValue = Int -- 0 or 1 to be precise but extra work to pattern match on types, easier to add assignment of int directly
+
+type SumVarValue = [IndexVarValue]
+
+-- IndexVar index is the potential mine / safe square, SumVar index is the index of a numbered square involved in a k-ary constraint. These are just convenient unique variable names.
+data Variable = IndexVar Index | SumVar Index
+    deriving (Eq)
+
+-- IndexVar is arbitrarily less than SumVar for Map sake
+instance Ord Variable where
+    compare (IndexVar _) (SumVar _) = LT
+    compare (SumVar _) (IndexVar _) = GT
+    compare (IndexVar i1) (IndexVar i2) = compare i1 i2
+    compare (SumVar s1) (SumVar s2) = compare s1 s2
+
+type Value = Either IndexVarValue SumVarValue
+
+-- Unary|Binary, dclares what variable it applies to in order that the function needs,
+-- Unary also has Int that specifies the length of values in its domain. For example 4 means the domain is [[0, 0, 0, 0], ... [1, 1, 1, 1]]
+-- has function that takes the assignment to the variables in order specified
+-- function returns True is constraint is preserved and False otherswise
+data Constraint = Unary Variable Int (SumVarValue -> Bool) | Binary Variable Variable (Value -> Value -> Bool)
+
+type CSPSolution = [(Index, IndexVarValue)]
 
 isMine :: HashSet Index -> Index -> Bool
 isMine mines idx = idx `member` mines
@@ -75,7 +112,7 @@ printBoardDebug board mines = do
         [1 .. iMax]
 
 defaultSquare :: Square
-defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = -1, isSolverFlagged = False}
+defaultSquare = Square{state = Closed, isFlagged = False, neighbourMinesCount = -1, isSolverFlagged = False, isSolverSafe = False}
 
 -- the 8 directions
 coords :: [Index]
@@ -204,16 +241,104 @@ probabilisticSolver board g =
         (list_idx, _) = randomR (0, length potentialSafeSquares - 1) g
      in potentialSafeSquares !! list_idx
 
+-- gives variables in order according to number of constraints involved in (most -> least)
+-- binarization of constraints happen here
+-- variables are closed unflagged squares that are neighbours of numbered squares
+getVariablesAndConstraints :: Board -> ([Variable], [Constraint])
+getVariablesAndConstraints board =
+    (indexVariables, constraints)
+  where
+    constraints = getConstraints
+    indexVariables = map IndexVar $ concatMap (unflaggedClosedNeighbours board) numberedSquares
+    numberedSquares = [idx | idx <- range $ bounds board, isNumberedSquare board idx]
+    getConstraints =
+        [Binary (IndexVar idx1) (IndexVar idx2) (getBinaryFunc idx) | (idx1, idx2, idx) <- twoUnflaggedClosedNeighbours] ++ [Unary (SumVar idx) (length candidates) (getUnaryFunc idx) | (candidates, idx) <- kUnflaggedClosedNeighbours] ++ concatMap binarize kUnflaggedClosedNeighbours
+      where
+        getBinaryFunc idx (Left a) (Left b) = (a + b) == neighbourMinesCount (board ! idx) - length (map (isSolverFlagged . (!) board) (closedNeighbours board idx))
+        getBinaryFunc _ _ _ = True
+
+        twoUnflaggedClosedNeighbours =
+            let candidates = unflaggedClosedNeighbours board
+             in [(candidates idx !! 0, candidates idx !! 1, idx) | idx <- numberedSquares, length (candidates idx) == 2]
+
+        kUnflaggedClosedNeighbours =
+            let candidates = unflaggedClosedNeighbours board
+             in [(candidates idx, idx) | idx <- numberedSquares, length (candidates idx) > 2]
+
+        getUnaryFunc idx value = sum value == (neighbourMinesCount (board ! idx) - length (map (isSolverFlagged . (!) board) (closedNeighbours board idx)))
+
+        binarize (candidates, idx) = [Binary (IndexVar (candidates !! idx1)) (SumVar idx) (getBinaryFunc' idx1) | idx1 <- [0 .. length candidates - 1]]
+
+        getBinaryFunc' idx (Left indexVarValue) (Right sumVarValue) = sumVarValue !! idx == indexVarValue
+        getBinaryFunc' idx (Right sumVarValue) (Left indexVarValue) = sumVarValue !! idx == indexVarValue
+        getBinaryFunc' _ _ _ = True
+
+getSafestSquare :: [CSPSolution] -> Board -> Index
+getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
+  where
+    f = find (\idx -> isSolverSafe (board ! idx)) (range $ bounds board)
+    computeProbability :: Index -> Double
+    computeProbability idx = fromIntegral (length (filter (\sol -> (idx, 1) `elem` sol) solutions)) / fromIntegral (length solutions)
+    getLowestProbabilityMine =
+        let closedSquares = filter (\idx -> state (board ! idx) == Closed) (range $ bounds board)
+            probabilities = map (\idx -> (idx, computeProbability idx)) closedSquares
+            (lowestIdx, _) = foldl1 (\acc@(_, prob1) (idx2, prob2) -> if prob1 < prob2 then acc else (idx2, prob2)) probabilities
+         in lowestIdx
+
+backtrack :: Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
+backtrack = undefined
+
 -- csp Solver
 -- TODO: use csp, efficient algorithm & reasonable heuristics to get a safe square, if still cannot, use probabilities from solutions
 -- TODO: retain useful info in board for next play? more record fields? / csp data type ++ ?
-cspSolver :: Board -> Index
-cspSolver = undefined
+-- assumes that findtrivialSafe square has been tried in the process trivialFlags has been called too.
+-- variables - all closed squares not marked as a flag -- domain - {0, 1} - 0 - Safe 1 - Mine
+-- constraints
+-- sum of variables = num_mines
+-- all open squares with numbers must have the number = sum of adjacent variables + adjacent flags
+-- break n-ary constraints into unary and binary
+-- use backtracking with arc consistency to find all solutions
+cspSolver :: Board -> (Index, Board)
+cspSolver board =
+    let (indexVariables, constraints) = getVariablesAndConstraints board
+        unaryConstraints =
+            filter
+                ( \case
+                    (Unary{}) -> True
+                    _ -> False
+                )
+                constraints
+        binaryConstraints =
+            filter
+                ( \case
+                    (Unary{}) -> False
+                    _ -> True
+                )
+                constraints
+
+        getSumVariableDomains (Unary (SumVar idx) numIndexVariables func) = (SumVar idx, map Right $ filter func (replicateM numIndexVariables [0, 1]))
+        getSumVariableDomains _ = undefined -- not used
+        sumVariablesWithDomains = Map.fromList (map getSumVariableDomains unaryConstraints)
+        indexVariablesWithDomains = Map.fromList (map (,[Left 0, Left 1]) indexVariables)
+
+        domains = Map.union indexVariablesWithDomains sumVariablesWithDomains
+
+        variables = indexVariables ++ Map.keys sumVariablesWithDomains
+
+        solutions = backtrack board variables binaryConstraints domains
+
+        flaggedBoard = board // [(idx, (board ! idx){isSolverFlagged = True}) | idx <- range $ bounds board, filterMines idx]
+        filterMines idx = all ((== Just 1) . lookup idx) solutions -- solver flag all squares that are mines in all solutions
+        updatedBoard = board // [(idx, (flaggedBoard ! idx){isSolverSafe = True}) | idx <- range $ bounds board, filterSafe idx]
+        filterSafe idx = all ((== Just 0) . lookup idx) solutions -- solver mark all squares that are safe in all solutions
+     in (getSafestSquare solutions updatedBoard, updatedBoard)
 
 solver :: Board -> StdGen -> (Index, Board)
 solver board g = case findTrivialSafeSquare board of
     (Just idx, flagged_board) -> (idx, flagged_board)
     (Nothing, flagged_board) -> (probabilisticSolver flagged_board g, flagged_board)
+
+-- try find (\idx -> isSolverSafe (board ! idx) ) (range $ bounds board) before cspSolver
 
 play :: Move -> Board -> HashSet Index -> Index -> Board
 play OpenSquare board mines idx = openSquare idx mines board
