@@ -348,12 +348,15 @@ degreeHeuristic vars constraints =
   where
     varCounts = countVariables vars constraints
 
-countVariables :: [Variable] -> [Constraint] -> Map.Map Variable Int
-countVariables vars = foldr countConstraint Map.empty
+countVariables :: [Variable] -> [Constraint] -> Map Variable Int
+countVariables vars = foldr countConstraint initialCounts
   where
+    initialCounts = Map.fromList $ map (,0) vars
+
     countConstraint (Unary v _ _) = updateCount v
     countConstraint (Binary v1 v2 _) = updateCount v1 . updateCount v2
-    updateCount v = Map.insertWith (+) v 1
+
+    updateCount = Map.adjust (+ 1)
 
 selectVariable :: Domains -> [Constraint] -> Variable
 selectVariable domain constraints =
