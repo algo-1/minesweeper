@@ -13,7 +13,7 @@ import Control.Monad (replicateM)
 import Data.Array (Array, array, bounds, range, (!), (//))
 import Data.Foldable (find)
 import Data.HashSet (HashSet, fromList, member)
-import Data.List (foldl', nub)
+import Data.List (foldl', nub, (\\))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
@@ -50,7 +50,7 @@ type SumVarValue = [IndexVarValue]
 
 -- IndexVar index is the potential mine / safe square, SumVar index is the index of a numbered square involved in a k-ary constraint. These are just convenient unique variable names.
 data Variable = IndexVar Index | SumVar Index
-    deriving (Eq)
+    deriving (Eq, Show)
 
 -- IndexVar is arbitrarily less than SumVar for Map sake
 instance Ord Variable where
@@ -66,6 +66,9 @@ type Value = Either IndexVarValue SumVarValue
 -- has function that takes the assignment to the variables in order specified
 -- function returns True is constraint is preserved and False otherswise
 data Constraint = Unary Variable Int (SumVarValue -> Bool) | Binary Variable Variable (Value -> Value -> Bool)
+instance Show Constraint where
+    show (Unary var idx _) = "Unary constraint on " ++ show var ++ "Num index vars = " ++ show idx
+    show (Binary var1 var2 _) = "Binary constraint between " ++ show var1 ++ " and " ++ show var2 ++ " with function"
 
 type CSPSolution = [(Variable, Value)]
 
@@ -102,6 +105,25 @@ printBoardDebug board mines = do
                     case state square of
                         Open -> putStr (if count /= 0 then show count ++ " " else "  ")
                         Closed -> (if isMine mines (i, j) then putStr "X " else putStr $ show count ++ " ")
+                )
+                [1 .. jMax]
+            putStrLn ""
+        )
+        [1 .. iMax]
+
+printBoardDebug2 :: Board -> HashSet Index -> IO ()
+printBoardDebug2 board mines = do
+    let (_, (iMax, jMax)) = bounds board
+    mapM_
+        ( \i -> do
+            mapM_
+                ( \j -> do
+                    let square = board ! (i, j)
+                    let count = neighbourMinesCount square
+                    let safe = if isSolverSafe square then "Y" else "N"
+                    case state square of
+                        Open -> putStr (if count /= 0 then show count ++ " " else "  ")
+                        Closed -> (if isMine mines (i, j) then putStr "X " else putStr $ safe ++ " ")
                 )
                 [1 .. jMax]
             putStrLn ""
@@ -251,7 +273,7 @@ getVariablesAndConstraints board =
     getConstraints =
         [Binary (IndexVar idx1) (IndexVar idx2) (getBinaryFunc idx) | (idx1, idx2, idx) <- twoUnflaggedClosedNeighbours] ++ [Unary (SumVar idx) (length candidates) (getUnaryFunc idx) | (candidates, idx) <- kUnflaggedClosedNeighbours] ++ concatMap binarize kUnflaggedClosedNeighbours
       where
-        getBinaryFunc idx (Left a) (Left b) = (a + b) == neighbourMinesCount (board ! idx) - length (map (isSolverFlagged . (!) board) (closedNeighbours board idx))
+        getBinaryFunc idx (Left a) (Left b) = (a + b) == neighbourMinesCount (board ! idx) - length (filter (isSolverFlagged . (!) board) (closedNeighbours board idx))
         getBinaryFunc _ _ _ = True
 
         twoUnflaggedClosedNeighbours =
@@ -262,7 +284,7 @@ getVariablesAndConstraints board =
             let candidates = unflaggedClosedNeighbours board
              in [(candidates idx, idx) | idx <- numberedSquares, length (candidates idx) > 2]
 
-        getUnaryFunc idx value = sum value == (neighbourMinesCount (board ! idx) - length (map (isSolverFlagged . (!) board) (closedNeighbours board idx)))
+        getUnaryFunc idx value = sum value == (neighbourMinesCount (board ! idx) - length (filter (isSolverFlagged . (!) board) (closedNeighbours board idx)))
 
         binarize (candidates, idx) = [Binary (IndexVar (candidates !! idx1)) (SumVar idx) (getBinaryFunc' idx1) | idx1 <- [0 .. length candidates - 1]]
 
@@ -273,7 +295,7 @@ getVariablesAndConstraints board =
 getSafestSquare :: [CSPSolution] -> Board -> Index
 getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
   where
-    f = find (\idx -> isSolverSafe (board ! idx)) (range $ bounds board)
+    f = find (\idx -> isSolverSafe (board ! idx) && state (board ! idx) == Closed) (range $ bounds board)
     computeProbability :: Index -> Double
     computeProbability idx = fromIntegral (length (filter (\sol -> (IndexVar idx, Left 1) `elem` sol) solutions)) / fromIntegral (length solutions)
     getLowestProbabilityMine =
@@ -283,19 +305,26 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
          in lowestIdx
 
 backtrack :: Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
-backtrack = backtrackHelper []
-
-backtrackHelper :: CSPSolution -> Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
-backtrackHelper assignment board variables constraints domains
-    | allVariablesAssigned assignment variables = [assignment] -- Found a valid assignment
-    | otherwise =
+backtrack board variables constraints domains = backtrackFromAssignment startAssignment remainingVars
+  where
+    startAssignment = selectInitialAssignment variables
+    remainingVars = variables \\ map fst startAssignment -- Remove already assigned variables
+    backtrackFromAssignment assignment [] = [assignment | isConsistent assignment constraints] -- Base case: return empty list if assignment violates constraints
+    backtrackFromAssignment assignment (var : remaining) =
         let
-            var = selectUnassignedVariable variables assignment
             values = selectDomainValues var domains
-            possibleAssignments = map (\value -> (var, value) : assignment) values
-            consistentAssignments = filter (`isConsistent` constraints) possibleAssignments
+            consistentValue val = isConsistent ((var, val) : assignment) constraints
+            validValues = filter consistentValue values
          in
-            concatMap (\asnmt -> backtrackHelper asnmt board variables constraints (updateDomains asnmt domains)) consistentAssignments
+            concatMap (\val -> backtrackFromAssignment ((var, val) : assignment) remaining) validValues
+
+    -- Function to select an initial assignment
+    selectInitialAssignment :: [Variable] -> CSPSolution
+    selectInitialAssignment [] = []
+    selectInitialAssignment (v : vs) =
+        case selectDomainValues v domains of
+            [] -> [] -- If a variable has an empty domain, return an empty list indicating no valid assignment
+            (x : _) -> (v, x) : selectInitialAssignment vs -- Assign the first available value
 
 checkConstraint :: Constraint -> CSPSolution -> Bool
 checkConstraint (Binary x y f) assignment =
@@ -332,7 +361,7 @@ selectDomainValues var domains = domains Map.! var
 -- all open squares with numbers must have the number = sum of adjacent variables + adjacent flags
 -- break n-ary constraints into unary and binary
 -- use backtracking with arc consistency to find all solutions
-cspSolver :: Board -> (Index, Board)
+cspSolver :: Board -> (Index, Board, [CSPSolution], Map Variable [Either IndexVarValue SumVarValue], [Variable])
 cspSolver board =
     let (indexVariables, constraints) = getVariablesAndConstraints board
         unaryConstraints =
@@ -367,17 +396,21 @@ cspSolver board =
         isIndexVar _ = False
 
         flaggedBoard = board // [(idx, (board ! idx){isSolverFlagged = True}) | idx <- range $ bounds board, filterMines (IndexVar idx)]
-        filterMines idx = all ((== Just (Left 1)) . lookup idx) solutions -- solver flag all squares that are mines in all solutions
+        filterMines idx = not (null solutions) && all ((== Just (Left 1)) . lookup idx) solutions -- solver flag all squares that are mines in all solutions
         updatedBoard = board // [(idx, (flaggedBoard ! idx){isSolverSafe = True}) | idx <- range $ bounds board, filterSafe (IndexVar idx)]
-        filterSafe idx = all ((== Just (Left 0)) . lookup idx) solutions -- solver mark all squares that are safe in all solutions
-     in (getSafestSquare solutions updatedBoard, updatedBoard)
+        filterSafe idx = not (null solutions) && all ((== Just (Left 0)) . lookup idx) solutions -- solver mark all squares that are safe in all solutions
+        (a, b) = (getSafestSquare solutions updatedBoard, updatedBoard)
+     in (a, b, solutions, domains, variables)
 
-solver :: Board -> StdGen -> (Index, Board)
+solver :: Board -> StdGen -> (Index, Board, [CSPSolution], Map Variable [Either IndexVarValue SumVarValue], [Variable])
 solver board g = case findTrivialSafeSquare board of
-    (Just idx, flagged_board) -> (idx, flagged_board)
-    (Nothing, flagged_board) -> (probabilisticSolver flagged_board g, flagged_board)
+    (Just idx, flagged_board) -> (idx, flagged_board, [], Map.empty, [])
+    (Nothing, flagged_board) ->
+        case find (\idx -> isSolverSafe (board ! idx) && state (board ! idx) == Closed) (range $ bounds board) of
+            (Just idx) -> (idx, flagged_board, [], Map.empty, [])
+            Nothing -> cspSolver flagged_board
 
--- try find (\idx -> isSolverSafe (board ! idx) ) (range $ bounds board) before cspSolver
+-- (probabilisticSolver flagged_board g, flagged_board)
 
 play :: Move -> Board -> HashSet Index -> Index -> Board
 play OpenSquare board mines idx = openSquare idx mines board
@@ -385,18 +418,45 @@ play ToggleFlag board _ idx = toggleFlagSquare idx board
 
 loop :: Board -> HashSet Index -> IO ()
 loop board mines = do
+    -- print "solver safe debug"
+    -- printBoardDebug2 board mines
     -- move <- readMove -- from user via cli
     -- idx <- readTuple -- from user via cli
     let move = OpenSquare -- solver only opens square
     g <- newStdGen
-    let (idx, flagged_board) = solver board g
+    -- print "solversafe find?"
+    -- print $ find (\idx -> isSolverSafe (board ! idx) && state (board ! idx) == Closed) (range $ bounds board)
+    -- print $ isSolverSafe (board ! (1, 1))
+    print $ getVariablesAndConstraints board
+
+    print "numbered squares"
+    let numberedSquares = [idx | idx <- range $ bounds board, isNumberedSquare board idx] -- numbered squares
+    let twoUnflaggedClosedNeighbours =
+            let candidates = unflaggedClosedNeighbours board
+             in [(candidates idx !! 0, candidates idx !! 1, idx) | idx <- numberedSquares, length (candidates idx) == 2]
+
+    print numberedSquares
+    print "binary constraints"
+    print twoUnflaggedClosedNeighbours
+    let (idx, board', sols, domains, variables) = solver board g
+
+    print "domains"
+    print domains
+
+    print "variables"
+    print variables
+    -- print "solver safe debug"
+    -- printBoardDebug2 board' mines
+    print "csp solutions"
+    print sols
     print "flagged board"
-    printBoard flagged_board
-    print [(index, isSolverFlagged (flagged_board ! index)) | index <- range $ bounds flagged_board, state (flagged_board ! index) == Closed && not (isSolverFlagged (flagged_board ! index))] -- potentially safe squares
-    print "triviallyOpen"
-    print $ triviallyOpen flagged_board
-    print "probabilistic solver"
-    print $ probabilisticSolver flagged_board g
+    printBoard board'
+    print "flagged indices"
+    print [(index, isSolverFlagged (board' ! index)) | index <- range $ bounds board', state (board' ! index) == Closed && isSolverFlagged (board' ! index)] -- solverflagged
+    -- print "triviallyOpen"
+    -- print $ triviallyOpen flagged_board
+    -- print "probabilistic solver"
+    -- print $ probabilisticSolver flagged_board g
     putStrLn ""
     print idx
     putStrLn ""
@@ -407,15 +467,15 @@ loop board mines = do
         else case move of
             OpenSquare ->
                 -- do not do anything if user tries to open a square that is open or flagged
-                ( if isFlagged (board ! idx) || state (board ! idx) == Open
+                ( if isFlagged (board' ! idx) || state (board' ! idx) == Open
                     then do
-                        printBoard board
+                        printBoard board'
                         putStrLn ""
-                        loop board mines
+                        loop board' mines
                     else
                         ( if not $ isMine mines idx
                             then do
-                                let new_board = play move board mines idx
+                                let new_board = play move board' mines idx
                                 printBoard new_board
                                 if gameWon new_board mines
                                     then do
@@ -426,7 +486,7 @@ loop board mines = do
                                         loop new_board mines
                             else do
                                 print "Game over! you picked a mine!"
-                                printBoardDebug board mines
+                                printBoardDebug board' mines
                                 return ()
                         )
                 )
