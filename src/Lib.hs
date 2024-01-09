@@ -335,6 +335,7 @@ selectVariable domain constraints =
     let candidates = mrvHeuristic domain
      in degreeHeuristic candidates constraints
 
+isNeighbor :: Board -> Variable -> Variable -> Bool
 isNeighbor board (IndexVar idx) (IndexVar potentialNeighIdx) = potentialNeighIdx `elem` unflaggedClosedNeighbours board idx
 isNeighbor _ _ _ = False
 
