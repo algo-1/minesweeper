@@ -311,6 +311,7 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
 backtrack :: Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
 backtrack board variables constraints domains = undefined
 
+mrvHeuristic :: Domains -> [Variable]
 mrvHeuristic domain =
     let lengths = Map.map length domain
         minLength = minimum (Map.elems lengths)
@@ -329,16 +330,20 @@ countVariables vars = foldr countConstraint Map.empty
     countConstraint (Binary v1 v2 _) = updateCount v1 . updateCount v2
     updateCount v = Map.insertWith (+) v 1
 
+selectVariable :: Domains -> [Constraint] -> Variable
+selectVariable domain constraints =
+    let candidates = mrvHeuristic domain
+     in degreeHeuristic candidates constraints
+
+isNeighbor board (IndexVar idx) (IndexVar potentialNeighIdx) = potentialNeighIdx `elem` unflaggedClosedNeighbours board idx
+isNeighbor _ _ _ = False
+
 lcvHeuristic :: Variable -> [Variable] -> Domains -> Board -> [Value]
 lcvHeuristic var unassignedVariables domains board =
     let neighboringVars = filter (\v -> isNeighbor board var v && notElem v unassignedVariables) unassignedVariables
         valueCounts = Map.fromList [(value, countExcludedValues value neighboringVars domains) | value <- domainOf var domains]
         sortedValues = sortBy (comparing snd) $ Map.toList valueCounts
      in map fst sortedValues
-
-isNeighbor :: Board -> Variable -> Variable -> Bool
-isNeighbor board (IndexVar idx) (IndexVar potentialNeighIdx) = potentialNeighIdx `elem` unflaggedClosedNeighbours board idx
-isNeighbor _ _ _ = False
 
 countExcludedValues :: Value -> [Variable] -> Domains -> Int
 countExcludedValues value variables domains =
