@@ -11,12 +11,14 @@ where
 
 import Control.Monad (replicateM)
 import Data.Array (Array, array, bounds, range, (!), (//))
-import Data.Foldable (find)
+import Data.Foldable (find, maximumBy)
+import Data.Function (on)
 import Data.HashSet (HashSet, fromList, member)
-import Data.List (foldl', nub, (\\))
+import Data.List (foldl', nub, sortBy, (\\))
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Ord (comparing)
 import System.Random
 import Text.Read (readMaybe)
 
@@ -71,6 +73,8 @@ instance Show Constraint where
     show (Binary var1 var2 _) = "Binary constraint between " ++ show var1 ++ " and " ++ show var2 ++ " with function"
 
 type CSPSolution = [(Variable, Value)]
+
+type Domains = Map Variable [Value]
 
 isMine :: HashSet Index -> Index -> Bool
 isMine mines idx = idx `member` mines
@@ -305,26 +309,43 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
          in lowestIdx
 
 backtrack :: Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
-backtrack board variables constraints domains = backtrackFromAssignment startAssignment remainingVars
-  where
-    startAssignment = selectInitialAssignment variables
-    remainingVars = variables \\ map fst startAssignment -- Remove already assigned variables
-    backtrackFromAssignment assignment [] = [assignment | isConsistent assignment constraints] -- Base case: return empty list if assignment violates constraints
-    backtrackFromAssignment assignment (var : remaining) =
-        let
-            values = selectDomainValues var domains
-            consistentValue val = isConsistent ((var, val) : assignment) constraints
-            validValues = filter consistentValue values
-         in
-            concatMap (\val -> backtrackFromAssignment ((var, val) : assignment) remaining) validValues
+backtrack board variables constraints domains = undefined
 
-    -- Function to select an initial assignment
-    selectInitialAssignment :: [Variable] -> CSPSolution
-    selectInitialAssignment [] = []
-    selectInitialAssignment (v : vs) =
-        case selectDomainValues v domains of
-            [] -> [] -- If a variable has an empty domain, return an empty list indicating no valid assignment
-            (x : _) -> (v, x) : selectInitialAssignment vs -- Assign the first available value
+mrvHeuristic domain =
+    let lengths = Map.map length domain
+        minLength = minimum (Map.elems lengths)
+     in Map.keys (Map.filter (== minLength) lengths)
+
+degreeHeuristic :: [Variable] -> [Constraint] -> Variable
+degreeHeuristic vars constraints =
+    fst $ maximumBy (compare `on` snd) $ Map.toList varCounts
+  where
+    varCounts = countVariables vars constraints
+
+countVariables :: [Variable] -> [Constraint] -> Map.Map Variable Int
+countVariables vars = foldr countConstraint Map.empty
+  where
+    countConstraint (Unary v _ _) = updateCount v
+    countConstraint (Binary v1 v2 _) = updateCount v1 . updateCount v2
+    updateCount v = Map.insertWith (+) v 1
+
+lcvHeuristic :: Variable -> [Variable] -> Domains -> Board -> [Value]
+lcvHeuristic var unassignedVariables domains board =
+    let neighboringVars = filter (\v -> isNeighbor board var v && notElem v unassignedVariables) unassignedVariables
+        valueCounts = Map.fromList [(value, countExcludedValues value neighboringVars domains) | value <- domainOf var domains]
+        sortedValues = sortBy (comparing snd) $ Map.toList valueCounts
+     in map fst sortedValues
+
+isNeighbor :: Board -> Variable -> Variable -> Bool
+isNeighbor board (IndexVar idx) (IndexVar potentialNeighIdx) = potentialNeighIdx `elem` unflaggedClosedNeighbours board idx
+isNeighbor _ _ _ = False
+
+countExcludedValues :: Value -> [Variable] -> Domains -> Int
+countExcludedValues value variables domains =
+    length $ filter (\var -> value `notElem` domainOf var domains) variables
+
+domainOf :: Variable -> Domains -> [Value]
+domainOf = Map.findWithDefault []
 
 checkConstraint :: Constraint -> CSPSolution -> Bool
 checkConstraint (Binary x y f) assignment =
