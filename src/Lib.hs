@@ -67,7 +67,7 @@ type Value = Either IndexVarValue SumVarValue
 -- function returns True is constraint is preserved and False otherswise
 data Constraint = Unary Variable Int (SumVarValue -> Bool) | Binary Variable Variable (Value -> Value -> Bool)
 
-type CSPSolution = [(Index, IndexVarValue)]
+type CSPSolution = [(Variable, Value)]
 
 isMine :: HashSet Index -> Index -> Bool
 isMine mines idx = idx `member` mines
@@ -275,7 +275,7 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
   where
     f = find (\idx -> isSolverSafe (board ! idx)) (range $ bounds board)
     computeProbability :: Index -> Double
-    computeProbability idx = fromIntegral (length (filter (\sol -> (idx, 1) `elem` sol) solutions)) / fromIntegral (length solutions)
+    computeProbability idx = fromIntegral (length (filter (\sol -> (IndexVar idx, Left 1) `elem` sol) solutions)) / fromIntegral (length solutions)
     getLowestProbabilityMine =
         let closedSquares = filter (\idx -> state (board ! idx) == Closed) (range $ bounds board)
             probabilities = map (\idx -> (idx, computeProbability idx)) closedSquares
@@ -283,7 +283,44 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
          in lowestIdx
 
 backtrack :: Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
-backtrack = undefined
+backtrack = backtrackHelper []
+
+backtrackHelper :: CSPSolution -> Board -> [Variable] -> [Constraint] -> Map Variable [Value] -> [CSPSolution]
+backtrackHelper assignment board variables constraints domains
+    | allVariablesAssigned assignment variables = [assignment] -- Found a valid assignment
+    | otherwise =
+        let
+            var = selectUnassignedVariable variables assignment
+            values = selectDomainValues var domains
+            possibleAssignments = map (\value -> (var, value) : assignment) values
+            consistentAssignments = filter (`isConsistent` constraints) possibleAssignments
+         in
+            concatMap (\asnmt -> backtrackHelper asnmt board variables constraints (updateDomains asnmt domains)) consistentAssignments
+
+checkConstraint :: Constraint -> CSPSolution -> Bool
+checkConstraint (Binary x y f) assignment =
+    let valX = lookup x assignment
+        valY = lookup y assignment
+     in case (valX, valY) of
+            (Just a, Just b) -> f a b || f b a
+            _ -> True
+checkConstraint _ _ = True -- Only binary constriants are passed into the csp
+
+isConsistent :: CSPSolution -> [Constraint] -> Bool
+isConsistent assignment = all (`checkConstraint` assignment)
+
+-- Function to update domains based on the current assignment
+updateDomains :: CSPSolution -> Map Variable [Value] -> Map Variable [Value]
+updateDomains assignment domains = foldr (\(var, val) acc -> Map.adjust (filter (/= val)) var acc) domains assignment
+
+allVariablesAssigned :: CSPSolution -> [Variable] -> Bool
+allVariablesAssigned assignment variables = length assignment == length variables
+
+selectUnassignedVariable :: [Variable] -> CSPSolution -> Variable
+selectUnassignedVariable variables assignment = head [var | var <- variables, var `notElem` map fst assignment]
+
+selectDomainValues :: Variable -> Map Variable [Value] -> [Value]
+selectDomainValues var domains = domains Map.! var
 
 -- csp Solver
 -- TODO: use csp, efficient algorithm & reasonable heuristics to get a safe square, if still cannot, use probabilities from solutions
@@ -322,12 +359,17 @@ cspSolver board =
 
         variables = indexVariables ++ Map.keys sumVariablesWithDomains
 
-        solutions = backtrack board variables binaryConstraints domains
+        solutions = map filterIndexVars (backtrack board variables binaryConstraints domains)
 
-        flaggedBoard = board // [(idx, (board ! idx){isSolverFlagged = True}) | idx <- range $ bounds board, filterMines idx]
-        filterMines idx = all ((== Just 1) . lookup idx) solutions -- solver flag all squares that are mines in all solutions
-        updatedBoard = board // [(idx, (flaggedBoard ! idx){isSolverSafe = True}) | idx <- range $ bounds board, filterSafe idx]
-        filterSafe idx = all ((== Just 0) . lookup idx) solutions -- solver mark all squares that are safe in all solutions
+        filterIndexVars sol = [(var, val) | (var, val) <- sol, isIndexVar var]
+
+        isIndexVar (IndexVar _) = True
+        isIndexVar _ = False
+
+        flaggedBoard = board // [(idx, (board ! idx){isSolverFlagged = True}) | idx <- range $ bounds board, filterMines (IndexVar idx)]
+        filterMines idx = all ((== Just (Left 1)) . lookup idx) solutions -- solver flag all squares that are mines in all solutions
+        updatedBoard = board // [(idx, (flaggedBoard ! idx){isSolverSafe = True}) | idx <- range $ bounds board, filterSafe (IndexVar idx)]
+        filterSafe idx = all ((== Just (Left 0)) . lookup idx) solutions -- solver mark all squares that are safe in all solutions
      in (getSafestSquare solutions updatedBoard, updatedBoard)
 
 solver :: Board -> StdGen -> (Index, Board)
