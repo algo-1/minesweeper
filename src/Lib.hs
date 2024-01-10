@@ -310,9 +310,9 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
 
 backtrack :: Board -> [Variable] -> [Constraint] -> Domains -> CSPSolution -> [CSPSolution] -> [CSPSolution]
 backtrack board variables constraints domains assignment solutions
-    | allVariablesAssigned assignment variables = assignment : solutions
+    | allVariablesAssigned assignment variables = [assignment]
     | otherwise =
-        let selectedVar = selectVariable domains constraints
+        let selectedVar = selectVariable domains constraints [var | (var, _) <- assignment]
             unassignedVariables = [var | var <- variables, var `notElem` map fst assignment]
             orderedValues = lcvHeuristic selectedVar unassignedVariables domains board
          in tryValues selectedVar orderedValues assignment solutions
@@ -326,8 +326,10 @@ backtrack board variables constraints domains assignment solutions
                     (inferenceResult, updatedDomains) = ac3 constraints domains
                  in if inferenceResult
                         then
-                            let result = backtrack board variables constraints updatedDomains newAssignment sols
-                             in tryValues var remainingValues asnmt result
+                            let
+                                res = backtrack board variables constraints updatedDomains newAssignment sols
+                             in
+                                sols ++ res
                         else tryValues var remainingValues asnmt sols
             else tryValues var remainingValues asnmt sols
 
@@ -375,11 +377,14 @@ ac3Helper arcs domains constraints =
                     else ac3Helper updatedArcs updatedDomains constraints
         else (True, domains) -- If all arcs are processed without empty domains, return True
 
-mrvHeuristic :: Domains -> [Variable]
-mrvHeuristic domain =
-    let lengths = Map.map length domain
+mrvHeuristic :: Domains -> [Variable] -> [Variable]
+mrvHeuristic domain assignedVars =
+    let
+        newMap = foldr Map.delete domain assignedVars
+        lengths = Map.map length newMap
         minLength = minimum (Map.elems lengths)
-     in Map.keys (Map.filter (== minLength) lengths)
+     in
+        Map.keys (Map.filter (== minLength) lengths)
 
 degreeHeuristic :: [Variable] -> [Constraint] -> Variable
 degreeHeuristic vars constraints =
@@ -397,9 +402,9 @@ countVariables vars = foldr countConstraint initialCounts
 
     updateCount = Map.adjust (+ 1)
 
-selectVariable :: Domains -> [Constraint] -> Variable
-selectVariable domain constraints =
-    let candidates = mrvHeuristic domain
+selectVariable :: Domains -> [Constraint] -> [Variable] -> Variable
+selectVariable domain constraints assignedVars =
+    let candidates = mrvHeuristic domain assignedVars
      in degreeHeuristic candidates constraints
 
 isNeighbor :: Board -> Variable -> Variable -> Bool
@@ -429,25 +434,10 @@ checkConstraint (Binary x y f) assignment =
             _ -> True
 checkConstraint _ _ = True -- Only binary constriants are passed into the csp
 
-isConsistent :: CSPSolution -> [Constraint] -> Bool
-isConsistent assignment = all (`checkConstraint` assignment)
-
--- Function to update domains based on the current assignment
--- updateDomains :: CSPSolution -> Map Variable [Value] -> Map Variable [Value]
--- updateDomains assignment domains = foldr (\(var, val) acc -> Map.adjust (filter (/= val)) var acc) domains assignment
-
 allVariablesAssigned :: CSPSolution -> [Variable] -> Bool
 allVariablesAssigned assignment variables = length assignment == length variables
 
-selectUnassignedVariable :: [Variable] -> CSPSolution -> Variable
-selectUnassignedVariable variables assignment = head [var | var <- variables, var `notElem` map fst assignment]
-
-selectDomainValues :: Variable -> Map Variable [Value] -> [Value]
-selectDomainValues var domains = domains Map.! var
-
 -- csp Solver
--- TODO: use csp, efficient algorithm & reasonable heuristics to get a safe square, if still cannot, use probabilities from solutions
--- TODO: retain useful info in board for next play? more record fields? / csp data type ++ ?
 -- assumes that findtrivialSafe square has been tried in the process trivialFlags has been called too.
 -- variables - all closed squares not marked as a flag -- domain - {0, 1} - 0 - Safe 1 - Mine
 -- constraints
@@ -482,7 +472,7 @@ cspSolver board =
 
         variables = indexVariables ++ Map.keys sumVariablesWithDomains
 
-        solutions = map filterIndexVars (backtrack board variables binaryConstraints domains [] [])
+        solutions = nub $ map filterIndexVars (backtrack board variables binaryConstraints domains [] [])
 
         filterIndexVars sol = [(var, val) | (var, val) <- sol, isIndexVar var]
 
@@ -521,7 +511,7 @@ loop board mines = do
     -- print "solversafe find?"
     -- print $ find (\idx -> isSolverSafe (board ! idx) && state (board ! idx) == Closed) (range $ bounds board)
     -- print $ isSolverSafe (board ! (1, 1))
-    print $ getVariablesAndConstraints board
+    -- print $ getVariablesAndConstraints board
 
     print "numbered squares"
     let numberedSquares = [idx | idx <- range $ bounds board, isNumberedSquare board idx] -- numbered squares
@@ -542,7 +532,14 @@ loop board mines = do
     -- print "solver safe debug"
     -- printBoardDebug2 board' mines
     print "csp solutions"
-    print sols
+    print $ take 5 sols
+
+    let safeIdxs = [idx | indx <- range $ bounds board, filterSafe (IndexVar indx)]
+        filterSafe indexx = not (null sols) && all ((== Just (Left 0)) . lookup indexx) sols
+
+    print "safe squares"
+    print safeIdxs
+
     print "flagged board"
     printBoard board'
     print "flagged indices"
