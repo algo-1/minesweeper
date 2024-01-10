@@ -308,33 +308,72 @@ getSafestSquare solutions board = fromMaybe getLowestProbabilityMine f
             (lowestIdx, _) = foldl1 (\acc@(_, prob1) (idx2, prob2) -> if prob1 < prob2 then acc else (idx2, prob2)) probabilities
          in lowestIdx
 
-backtrack :: Board -> [Variable] -> [Constraint] -> Domains -> CSPSolution -> [CSPSolution]
-backtrack board variables constraints domains assignment
-    | allVariablesAssigned assignment variables = [assignment]
+backtrack :: Board -> [Variable] -> [Constraint] -> Domains -> CSPSolution -> [CSPSolution] -> [CSPSolution]
+backtrack board variables constraints domains assignment solutions
+    | allVariablesAssigned assignment variables = assignment : solutions
     | otherwise =
         let selectedVar = selectVariable domains constraints
             unassignedVariables = [var | var <- variables, var `notElem` map fst assignment]
             orderedValues = lcvHeuristic selectedVar unassignedVariables domains board
-         in tryValues selectedVar orderedValues assignment
+         in tryValues selectedVar orderedValues assignment solutions
   where
-    tryValues :: Variable -> [Value] -> CSPSolution -> [CSPSolution]
-    tryValues _ [] _ = []
-    tryValues var (value : remainingValues) asnmt =
+    tryValues :: Variable -> [Value] -> CSPSolution -> [CSPSolution] -> [CSPSolution]
+    tryValues _ [] _ sols = sols
+    tryValues var (value : remainingValues) asnmt sols =
         if checkValue var value asnmt
             then
                 let newAssignment = (var, value) : asnmt
-                    (inferenceAssignments, updatedDomains) = ac3 constraints domains
-                    result = backtrack board variables constraints updatedDomains (inferenceAssignments ++ newAssignment)
-                 in result ++ tryValues var remainingValues asnmt
-            else tryValues var remainingValues asnmt
+                    (inferenceResult, updatedDomains) = ac3 constraints domains
+                 in if inferenceResult
+                        then
+                            let result = backtrack board variables constraints updatedDomains newAssignment sols
+                             in tryValues var remainingValues asnmt result
+                        else tryValues var remainingValues asnmt sols
+            else tryValues var remainingValues asnmt sols
 
     checkValue :: Variable -> Value -> CSPSolution -> Bool
     checkValue var value sol =
         let ff = flip checkConstraint ((var, value) : sol)
          in all ff constraints
 
-ac3 :: [Constraint] -> Domains -> (CSPSolution, Domains)
-ac3 constraints domains = undefined
+satisfiesConstraint :: Value -> Value -> (Value -> Value -> Bool) -> Bool
+satisfiesConstraint x y func = func x y || func y x
+
+-- perform revise for the (X, C) arc of (X C Y)return updated domain of X
+revise :: Variable -> [Value] -> [Value] -> (Value -> Value -> Bool) -> (Variable, [Value])
+revise a xDomain yDomain constraint = (a, filter (\x -> any (\y -> satisfiesConstraint x y constraint) yDomain) xDomain)
+
+uncurry4 :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
+uncurry4 f (w, x, y, z) = f w x y z
+
+ac3 :: [Constraint] -> Domains -> (Bool, Domains)
+ac3 constraints domains =
+    let arcs =
+            [(a, domains Map.! a, domains Map.! b, f) | (Binary a b f) <- constraints]
+                ++ [(b, domains Map.! b, domains Map.! a, f) | (Binary a b f) <- constraints]
+     in ac3Helper arcs domains constraints
+
+ac3Helper :: [(Variable, [Value], [Value], Value -> Value -> Bool)] -> Domains -> [Constraint] -> (Bool, Domains)
+ac3Helper arcs domains constraints =
+    if not (null arcs)
+        then
+            let
+                -- Step 1: Remove the first arc from arcs
+                (currentVar, xDomain, yDomain, constraint) : remainingArcs = arcs
+
+                -- Step 2: Revise the domain of the current arc
+                (revisedDomainVar, revisedXDomain) = revise currentVar xDomain yDomain constraint
+
+                -- Step 3: Update the domains with the revised domain
+                updatedDomains = Map.insert revisedDomainVar revisedXDomain domains
+
+                -- Step 4: Update arcs based on the revised domain
+                updatedArcs = remainingArcs ++ [(a, updatedDomains Map.! a, updatedDomains Map.! b, f) | (Binary a b f) <- constraints, b == revisedDomainVar]
+             in
+                if null revisedXDomain
+                    then (False, updatedDomains) -- If domain becomes empty, return False
+                    else ac3Helper updatedArcs updatedDomains constraints
+        else (True, domains) -- If all arcs are processed without empty domains, return True
 
 mrvHeuristic :: Domains -> [Variable]
 mrvHeuristic domain =
@@ -443,7 +482,7 @@ cspSolver board =
 
         variables = indexVariables ++ Map.keys sumVariablesWithDomains
 
-        solutions = map filterIndexVars (backtrack board variables binaryConstraints domains [])
+        solutions = map filterIndexVars (backtrack board variables binaryConstraints domains [] [])
 
         filterIndexVars sol = [(var, val) | (var, val) <- sol, isIndexVar var]
 
