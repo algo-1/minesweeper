@@ -323,7 +323,7 @@ backtrack board variables constraints domains assignment solutions
         if checkValue var value asnmt
             then
                 let newAssignment = (var, value) : asnmt
-                    (inferenceResult, updatedDomains) = ac3 constraints domains
+                    (inferenceResult, updatedDomains) = ac3 constraints (Map.insert var [value] domains)
                  in if inferenceResult
                         then
                             let
@@ -350,10 +350,12 @@ uncurry4 f (w, x, y, z) = f w x y z
 
 ac3 :: [Constraint] -> Domains -> (Bool, Domains)
 ac3 constraints domains =
-    let arcs =
+    let
+        arcs =
             [(a, domains Map.! a, domains Map.! b, f) | (Binary a b f) <- constraints]
                 ++ [(b, domains Map.! b, domains Map.! a, f) | (Binary a b f) <- constraints]
-     in ac3Helper arcs domains constraints
+     in
+        ac3Helper arcs domains constraints
 
 ac3Helper :: [(Variable, [Value], [Value], Value -> Value -> Bool)] -> Domains -> [Constraint] -> (Bool, Domains)
 ac3Helper arcs domains constraints =
@@ -377,11 +379,12 @@ ac3Helper arcs domains constraints =
                     else ac3Helper updatedArcs updatedDomains constraints
         else (True, domains) -- If all arcs are processed without empty domains, return True
 
-mrvHeuristic :: Domains -> [Variable] -> [Variable]
 mrvHeuristic domain assignedVars =
     let
-        newMap = foldr Map.delete domain assignedVars
-        lengths = Map.map length newMap
+        -- Filter out assigned variables from the domain
+        filteredDomain = Map.filterWithKey (\var _ -> var `notElem` assignedVars) domain
+
+        lengths = Map.map length filteredDomain
         minLength = minimum (Map.elems lengths)
      in
         Map.keys (Map.filter (== minLength) lengths)
@@ -470,7 +473,7 @@ cspSolver board =
 
         domains = Map.union indexVariablesWithDomains sumVariablesWithDomains
 
-        variables = indexVariables ++ Map.keys sumVariablesWithDomains
+        variables = nub $ indexVariables ++ Map.keys sumVariablesWithDomains
 
         solutions = nub $ map filterIndexVars (backtrack board variables binaryConstraints domains [] [])
 
