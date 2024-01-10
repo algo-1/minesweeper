@@ -3,7 +3,42 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: threepenny-gui-0.9.4.0@sha256:5bb149a773a573b64b5f4d3c392aba45fee033eb714987e1baeeb361c74fd687,9900
+    pantry-tree:
+      sha256: 439c9105c0d29a8eb993140300d2f1bd5384fb01a8c35bfb0aa8e52a23291bf8
+      size: 4283
+  original:
+    hackage: threepenny-gui-0.9.4.0
+- completed:
+    hackage: snap-core-1.0.5.1@sha256:e84e14c59ef925cf83312103449e4253800489d051991675b747ee5bcc6dda4e,9502
+    pantry-tree:
+      sha256: 58715afcb05dfac897b3a4ab3dd8e34f99f17c65d470f589202ef62ead8453ca
+      size: 3429
+  original:
+    hackage: snap-core-1.0.5.1
+- completed:
+    hackage: snap-server-1.1.2.1@sha256:8ea05b9b068c1e86be77073107eadc177d7eec93724963c063877478a062b229,15471
+    pantry-tree:
+      sha256: ddeae933a2dfb19eebe466b1be5014b002154f18624e654086b13fe4bb56c0fd
+      size: 3313
+  original:
+    hackage: snap-server-1.1.2.1
+- completed:
+    hackage: websockets-snap-0.10.3.1@sha256:1e52d1b67eaa54e4c5e66e84fc22e9a2ca41bf9930ea2c94b8ec11e4080d3f23,1042
+    pantry-tree:
+      sha256: 14aa753981ac0c8465d0d18ea84f0b1414d6e7a6232d47958e61b1d04e227f16
+      size: 331
+  original:
+    hackage: websockets-snap-0.10.3.1
+- completed:
+    hackage: readable-0.3.1@sha256:ea550740bbee9ae46c6bbf1c5e5185818a1d37509b855c640b0a7f2dfba6dc37,1121
+    pantry-tree:
+      sha256: a93d2c4e208cf064a8b1e8087d7a8ea77c263115e7ba18f3ef6abe935548faca
+      size: 313
+  original:
+    hackage: readable-0.3.1
 snapshots:
 - completed:
     sha256: 5a59b2a405b3aba3c00188453be172b85893cab8ebc352b1ef58b0eae5d248a2

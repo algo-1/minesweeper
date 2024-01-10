@@ -51,6 +51,11 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - minesweeper
+      - threepenny-gui
+      - snap-core
+      - snap-server
+      - websockets-snap
+      - readable
 
 tests:
   minesweeper-test:

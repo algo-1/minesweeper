@@ -1,6 +1,11 @@
+{-# LANGUAGE ImportQualifiedPost #-}
+
 module Main (main) where
 
 import Lib
+
+import Graphics.UI.Threepenny qualified as UI
+import Graphics.UI.Threepenny.Core
 
 main :: IO ()
 main = do

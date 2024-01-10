@@ -379,6 +379,7 @@ ac3Helper arcs domains constraints =
                     else ac3Helper updatedArcs updatedDomains constraints
         else (True, domains) -- If all arcs are processed without empty domains, return True
 
+mrvHeuristic :: Domains -> [Variable] -> [Variable]
 mrvHeuristic domain assignedVars =
     let
         -- Filter out assigned variables from the domain
