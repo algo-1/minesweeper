@@ -380,7 +380,7 @@ drawSquare
         canvas # set' UI.textFont "24px sans-serif"
         canvas
             # UI.fillText
-                (show count)
+                (if count /= 0 then show count else "")
                 ( fromIntegral
                     ((j * (canvasSize `div` n)) + ((canvasSize `div` n) `div` 2))
                 , fromIntegral
