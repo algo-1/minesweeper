@@ -136,7 +136,7 @@ setup g emptyBoard window = do
 
         -- let idx = (floor (y `div` (canvasSize `div` size)), floor (x `div` (canvasSize `div` size)))
 
-        let idx = ((floor y) `div` (canvasSize `div` size), (floor x) `div` (canvasSize `div` size))
+        let idx = (((floor y) `div` (canvasSize `div` size)) + 1, ((floor x) `div` (canvasSize `div` size)) + 1)
 
         case mode of
             0 -> do
@@ -183,7 +183,7 @@ drawGame arr status canvas = do
                 mapM_
                     ( \j -> do
                         let square = b ! (i, j)
-                        drawSquare (i, j) square canvas
+                        drawSquare (i - 1, j - 1) square canvas -- because the array is 1 indexed
                     )
                     [1 .. uj]
             )
