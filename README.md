@@ -1,13 +1,13 @@
 # Minesweeper Documentation
 
-The classic Minesweeper game implemented in Haskell.
+The classic Minesweeper game in Haskell.
 
 The command `stack run` builds and runs the project. All dependencies should be
 installed and the GUI will be served at `http://127.0.0.1:8023/`.
 
 ## Design
 
-I made the decision to represent the game with the `Puzzle` record type below
+I decided to represent the game with the `Puzzle` record type below
 
 ```haskell
 import Data.Array(Array)
@@ -31,13 +31,13 @@ data Puzzle = Puzzle
 
 No puzzle is created until the first play, this is to avoid moving the mine to a different position due to the player choosing a spot that was a mine as it is impossible to lose on the first turn.
 
-The Data.Array data structure was chosen because I wanted to easily modify effiently and a linked list was not the best choice for this. I could have opted for `Vector` described as more efficient arrays but `Array` is efficient enough and I preferered the structure of using a 2d array than performing extra calculations due to the 1d nature of vector.
-Initially, I also had `isMine` as a field in `Square` but decided against it to make it impossible for a solver to peek and use this information to aid solving the game.
-The `isSolverFlagged` and `isSolverSafe` fields are used by the solver mark squares as mines or safe and can easily use this information in a subsequent play. This eliminates the need to solve unecessary, thereby improving the efficiency. Another benefit is seperation from the user toggling the flag. This has absolutely no effect on the solver.
+The `Data.Array` data structure was chosen because I wanted to easily modify it efficiently and a linked list was not the best choice for this. I could have opted for `Vector` described as a more efficient array but `Array` is efficient enough and I preferred the structure of using a 2d array rather than performing extra calculations due to the 1d nature of vector.
+Initially, I also had `isMine` as a field in `Square` but decided against it to make it impossible for a solver to peek and use this information to aid in solving the game.
+The `isSolverFlagged` and `isSolverSafe` fields are used by the solver to mark squares as mine or safe and can easily use this information in a subsequent play. This eliminates the need to solve it unnecessarily, thereby improving efficiency. Another benefit is seperation from the user toggling the flag. This has absolutely no effect on the solver.
 
 Initially, my algorithm for the solver was to
 
-1. flag all neighbours of squares where square is opened and have a number equal to the number of closed neighbours.
+1. flag all neighbours of squares where the square is opened and have a number equal to the number of closed neighbours.
 2. find if possible and play in a trivially open square where there exists a neighbouring index (i, j) that
    has a `neighbourMinesCount` = the number of its neighbours that have been flagged by the solver.
 3. if no trivially open flags are found, randomly select a closed square and play there.
@@ -45,7 +45,7 @@ Initially, my algorithm for the solver was to
 My current solver maintains 1 and 2 above but after that, it checks to see if there is a square that the solver has marked safe and plays there, else, it calls the `CSPSolver.` The constraint satisfaction problem is defined as the following,
 
 1. Variables are all unflagged neighbours of numbered squares with a domain of {0, 1}, where 0 represents safe and 1 represents a mine.
-2. Constraints are sum of variables of a nunmbered square must equal the number in the numbered square. N-ary (> 2 variables) constraints are binarized using the sum-variable method. I chose to represent the constraints using the data type below
+2. Constraints are the sum of variables of a numbered square must equal the number in the numbered square. N-ary (> 2 variables) constraints are binarized using the sum-variable method. I chose to represent the constraints using the data type below
 
 ```haskell
 type IndexVarValue = Int
@@ -71,23 +71,19 @@ Y = S[1]
 Z = S[2]
 ```
 
-The domain for S initially would be all 8 combinations of (a, b, c) such that dom a, b, c = {0, 1} but this is immediately reduced to only pairs that satisfy X+Y+Z = 3. Hemce, only binary constraints are passed into the solver.
-This is nice because the algorithm for maintaining arc-consistency (AC-3) works on only binary constraints. Other heuristics were implemented for ordering the variables and values in the domains. Mininum remaining variable heuristic was used for ordering variables with degree heurisrtic used to break ties and the least cnstrained value heuristic was used to order the domain values of a variable.
-squares that are mines in all solutions are set to flagged, squares that are safe in all solutions are set to 0. There is probably a subtle bug that causes hanging sometimes that I did not have time to identify. I tested with the cli that it is able to solve most intermediate boards completely. A key observation when it fails is when at the start only one square is opened. To maximise that multiple squares are opened at the start, the solver always starts at the bottom left.
+The domain for S initially would be all 8 combinations of (a, b, c) such that dom a, b, c = {0, 1} but this is immediately reduced to only pairs that satisfy X+Y+Z = 3. Hence, only binary constraints are passed into the solver.
+This is nice because the algorithm for maintaining arc-consistency (AC-3) works on only binary constraints. Other heuristics were implemented for ordering the variables and values in the domains. The minimum remaining variable heuristic was used for ordering variables with the degree heuristic used to break ties and the least constrained value heuristic used to order the domain values of a variable.
+squares that are mines in all solutions are flagged, and squares that are safe in all solutions are marked safe. There is probably a subtle bug that causes hanging sometimes that I did not have time to identify. I tested with the cli that it is able to solve most intermediate boards completely. A key observation when it fails is when at the start only one square is opened. To maximise that multiple squares are opened at the start, the solver always starts at the bottom left.
 
 I opted not to use all closed squares as an optimisation. Which makes it slightly suboptimal but fast.
 I found this idea from [Stanford Poster](https://web.stanford.edu/class/archive/cs/cs221/cs221.1192/2018/restricted/posters/thowarth/poster.pdf).
 
 I implemented a cli version first that can be uncommented (GUI part has to be commented to avoid errors). This allowed me to perform manual tests quickly.
 
-For the GUI, the default mode is opening a square, to flag a square, the "Flag Mode" button has to be clicked. I use a canvas to represent the board and convert between a position on the canvas and an index in the board by performing calculations on the size of the board and canvas and adjusting by 1 because I used 1-indexing. In hindsight I could have easily used 0 but this was easily resolved. The "AI Move" and "AI Move till End of Game" buttons are used to play one AI move and let the AI play until the game ends respectively. The squares flagged by the AI have a \* in them while the user flagged squares are just filled with red for differentiation.
+For the GUI, the default mode is opening a square, to flag a square, the "Flag Mode" button has to be clicked. I use a canvas to represent the board and convert between a position on the canvas and an index in the board by performing calculations on the size of the board and canvas and adjusting by 1 because I used 1-indexing. In hindsight, I could have easily used 0 but this was easily resolved. The "AI Move" and "AI Move till End of Game" buttons are used to play one AI move and let the AI play until the game ends respectively. The squares flagged by the AI have a \* in them while the user flagged squares are just filled with red for differentiation.
 It is also possible to start a new game by clicking the "Start New Game" button.
 I used IORef to maintain key variables for controlling the behaviour. This choice was to facilitate ease of development.
 Here is a picture that shows the board.
 
 ![minesweeper board](minesweeper.png)
 
-## Reflection
-
-I found Haskell to be really nice for representing the game, I made extensive use of pattern matching, throughout the implementation. I used `IORef` entirely for the GUI as I found FRP rather unintuitive to work with. I do hope to learn it through more practice at some point in the future. For the most part, debugging turned out to be easier than I had imagined due to purity and the type system, granted I returned more values to print at the top level but I was able to pinpoint where the bugs where. For testing, I was hoping to try out `QuickCheck`but due to time constraints, I did manual testing. During the implementation of `CSPSolver`, I would have benefitted immensely from both unit tests and something like `QuickCheck`. With so many components, it would have been a good way to ensure that all bases were covered and the behaviour was exactly as expected.
-I was able to implement all deliverables. I should note that the `CSPSolver` is not perfect, more can be done to make it better.
