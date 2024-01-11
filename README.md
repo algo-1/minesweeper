@@ -71,12 +71,14 @@ Y = S[1]
 Z = S[2]
 ```
 
+For the Variables, I opted not to consider only unflagged neighbours of numbered squares as an optimisation. This makes it slightly suboptimal but fast.
+I found this idea from [Stanford Poster](https://web.stanford.edu/class/archive/cs/cs221/cs221.1192/2018/restricted/posters/thowarth/poster.pdf).
+
 The domain for S initially would be all 8 combinations of (a, b, c) such that dom a, b, c = {0, 1} but this is immediately reduced to only pairs that satisfy X+Y+Z = 3. Hence, only binary constraints are passed into the solver.
 This is nice because the algorithm for maintaining arc-consistency (AC-3) works on only binary constraints. Other heuristics were implemented for ordering the variables and values in the domains. The minimum remaining variable heuristic was used for ordering variables with the degree heuristic used to break ties and the least constrained value heuristic used to order the domain values of a variable.
-squares that are mines in all solutions are flagged, and squares that are safe in all solutions are marked safe. There is probably a subtle bug that causes hanging sometimes that I did not have time to identify. I tested with the cli that it is able to solve most intermediate boards completely. A key observation when it fails is when at the start only one square is opened. To maximise that multiple squares are opened at the start, the solver always starts at the bottom left.
+squares that are mines in all solutions are flagged, and squares that are safe in all solutions are marked safe. There is probably a subtle bug that causes hanging sometimes that I did not have time to identify. I tested with the cli that it can solve most intermediate boards completely. A key observation when it fails is when at the start only one square is opened. To maximise that multiple squares are opened at the start, the solver always starts at the bottom left.
+If there is no safe square to play, the solver calculates probabilities based on how many solutions were mines and plays in the square that is least likely to be a mine.
 
-For the constraints, I opted not to use all closed squares as an optimisation. Which makes it slightly suboptimal but fast.
-I found this idea from [Stanford Poster](https://web.stanford.edu/class/archive/cs/cs221/cs221.1192/2018/restricted/posters/thowarth/poster.pdf).
 
 I implemented a cli version first that can be uncommented (GUI part has to be commented to avoid errors). This allowed me to perform manual tests quickly.
 
