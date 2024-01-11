@@ -11,6 +11,7 @@ module Lib (
     play',
     solver,
     printBoard,
+    gameWon,
     Index,
     Board,
     Move (..),
@@ -625,7 +626,7 @@ runGame puzzleIO = do
 data Status = LOST | WON | ONGOING
 play' :: Move -> Board -> HashSet Index -> Index -> (Board, Status)
 play' OpenSquare board mines idx
-    | isFlagged (board ! idx) || state (board ! idx) == Open = (board, ONGOING)
+    | isSolverFlagged (board ! idx) || isFlagged (board ! idx) || state (board ! idx) == Open = (board, ONGOING)
     | otherwise = case (isMine mines idx) of
         True -> (play OpenSquare board mines idx, LOST)
         False ->

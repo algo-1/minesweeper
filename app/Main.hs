@@ -74,7 +74,6 @@ setup g emptyBoard window = do
            ]
 
     currentBoard <- liftIO $ newIORef emptyBoard
-    prevIndex <- liftIO $ newIORef (-1, -1)
     currentMode <- liftIO $ newIORef 0
     mines <- liftIO $ newIORef HashSet.empty
     count <- liftIO $ newIORef 1
@@ -86,23 +85,25 @@ setup g emptyBoard window = do
         liftIO $ writeIORef currentMode 1
 
     on UI.click aiMoveButton $ \_ -> do
-        prevIndex' <- liftIO $ readIORef prevIndex
         count' <- liftIO $ readIORef count
-        if count' == 2
+        if count' == 1
             then do
-                (Puzzle newBoard newMines) <- liftIO $ generateNewPuzzle n m numMines prevIndex'
+                -- generate new puzzle + play on first click
+                (Puzzle newBoard newMines) <- liftIO $ generateNewPuzzle m n numMines aiStartPos
+                -- store new board and mines
                 liftIO $ writeIORef currentBoard newBoard
                 liftIO $ writeIORef mines newMines
-            else return ()
 
-        board <- liftIO $ readIORef currentBoard
-        mines' <- liftIO $ readIORef mines
-        let (idx, solverBoard, _, _, _) = solver board g
-            (board', status) = if count' > 1 then play' OpenSquare solverBoard mines' idx else play' OpenSquare board mines' aiStartPos
-        liftIO $ writeIORef currentBoard board'
-        liftIO $ writeIORef count (count' + 1)
-        liftIO $ writeIORef prevIndex idx
-        drawGame board' status canvas
+                liftIO $ writeIORef count (count' + 1)
+                drawGame newBoard (if gameWon newBoard newMines then WON else ONGOING) canvas
+            else do
+                board <- liftIO $ readIORef currentBoard
+                mines' <- liftIO $ readIORef mines
+                let (idx, solverBoard, _, _, _) = solver board g
+                    (board', status) = play' OpenSquare solverBoard mines' idx
+                liftIO $ writeIORef currentBoard board'
+                liftIO $ writeIORef count (count' + 1)
+                drawGame board' status canvas
 
     on UI.click newGameButton $ \_ -> do
         canvas # UI.clearCanvas
@@ -110,8 +111,6 @@ setup g emptyBoard window = do
         liftIO $ writeIORef currentBoard emptyBoard
         -- reset mines
         liftIO $ writeIORef mines HashSet.empty
-        -- reset prevIndex
-        liftIO $ writeIORef prevIndex (-1, -1)
         -- reset count
         liftIO $ writeIORef count 1
         -- reset mode
@@ -120,35 +119,35 @@ setup g emptyBoard window = do
             drawGame emptyBoard ONGOING canvas
 
     on UI.mousedown canvas $ \(x, y) -> do
-        prevIndex' <- liftIO $ readIORef prevIndex
         count' <- liftIO $ readIORef count
-        if count' == 2
-            then do
-                (Puzzle newBoard newMines) <- liftIO $ generateNewPuzzle n m numMines prevIndex'
-                liftIO $ writeIORef currentBoard newBoard
-                liftIO $ writeIORef mines newMines
-            else return ()
-        mode <- liftIO $ readIORef currentMode
-        mines' <- liftIO $ readIORef mines
-        board <- liftIO $ readIORef currentBoard
-
         let idx = (((floor y) `div` (canvasSize `div` n)) + 1, ((floor x) `div` (canvasSize `div` m)) + 1)
 
-        case mode of
-            0 -> do
-                let (board', status) = play' OpenSquare board mines' idx
-                liftIO $ writeIORef currentBoard board'
+        if count' == 1
+            then do
+                -- Generate new puzzle + play on first click
+                (Puzzle newBoard newMines) <- liftIO $ generateNewPuzzle m n numMines idx
+                -- Store new board and mines
+                liftIO $ writeIORef currentBoard newBoard
+                liftIO $ writeIORef mines newMines
                 liftIO $ writeIORef count (count' + 1)
-                liftIO $ printBoard board'
-                liftIO $ print (show count')
-                liftIO $ writeIORef prevIndex idx
-                drawGame board' status canvas
-            1 -> do
-                let (board', status) = play' ToggleFlag board mines' idx
-                liftIO $ writeIORef currentBoard board'
-                liftIO $ writeIORef count (count' + 1)
-                liftIO $ writeIORef prevIndex idx
-                drawGame board' status canvas
+            else do
+                mode <- liftIO $ readIORef currentMode
+                mines' <- liftIO $ readIORef mines
+                board <- liftIO $ readIORef currentBoard
+
+                case mode of
+                    0 -> do
+                        let (board', status) = play' OpenSquare board mines' idx
+                        liftIO $ writeIORef currentBoard board'
+                        liftIO $ writeIORef count (count' + 1)
+                        liftIO $ printBoard board'
+                        liftIO $ print (show count')
+                        drawGame board' status canvas
+                    1 -> do
+                        let (board', status) = play' ToggleFlag board mines' idx
+                        liftIO $ writeIORef currentBoard board'
+                        liftIO $ writeIORef count (count' + 1)
+                        drawGame board' status canvas
 
 -- Draws the game
 drawGame :: Board -> Status -> Element -> UI ()
