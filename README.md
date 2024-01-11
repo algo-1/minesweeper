@@ -67,9 +67,9 @@ I found this idea from [Stanford Poster](https://web.stanford.edu/class/archive/
 The Unary Constraint is only used for sum variables. They are immediately converted to domains. For example, if we have the following 3-ary constraint,
 
 ```bash
-X + Y + Z = 3
+X + Y + Z = 2
 This becomes,
-sum S = 3
+sum S = 2
 X = S[0]
 Y = S[1]
 Z = S[2]
