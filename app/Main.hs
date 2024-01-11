@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -6,6 +7,7 @@ module Main (main) where
 
 import Control.Monad (unless)
 import Data.Array (bounds, (!))
+import Data.HashSet (HashSet)
 import Data.HashSet qualified as HashSet
 import Data.IORef
 import Graphics.UI.Threepenny qualified as UI
@@ -63,7 +65,7 @@ setup g emptyBoard window = do
     flagModeButton <- UI.button #+ [string "Flag Mode"]
     aiMoveButton <- UI.button #+ [string "AI Move"]
     newGameButton <- UI.button #+ [string "Start New Game"]
-    -- playUntilCompletion <- UI.button #+ [string "AI Move till End of Game"]
+    playUntilCompletionButton <- UI.button #+ [string "AI Move till End of Game"]
 
     currentBoard <- liftIO $ newIORef emptyBoard
     currentMode <- liftIO $ newIORef 0
@@ -79,6 +81,7 @@ setup g emptyBoard window = do
            , element flagModeButton
            , element aiMoveButton
            , element newGameButton
+           , element playUntilCompletionButton
            ]
 
     on UI.click openModeButton $ \_ -> do
@@ -155,6 +158,34 @@ setup g emptyBoard window = do
                             liftIO $ writeIORef count (count' + 1)
                             drawGame board' status canvas gameOver
 
+    on UI.click playUntilCompletionButton $ \_ -> do
+        f canvas count currentBoard mines gameOver g
+
+f :: Element -> IORef Int -> IORef Board -> IORef (HashSet Index) -> IORef Bool -> StdGen -> UI ()
+f canvas count currentBoard mines gameOver g = do
+    gameOver' <- liftIO $ readIORef gameOver
+    unless gameOver' $ do
+        count' <- liftIO $ readIORef count
+        if count' == 1
+            then do
+                -- generate new puzzle + play on the first click
+                (Puzzle newBoard newMines) <- liftIO $ generateNewPuzzle m n numMines aiStartPos
+                -- store new board and mines
+                liftIO $ writeIORef currentBoard newBoard
+                liftIO $ writeIORef mines newMines
+
+                liftIO $ writeIORef count (count' + 1)
+                drawGame newBoard (if gameWon newBoard newMines then WON else ONGOING) canvas gameOver
+            else do
+                board <- liftIO $ readIORef currentBoard
+                mines' <- liftIO $ readIORef mines
+                let (idx, solverBoard, _, _, _) = solver board g
+                    (board', status) = play' OpenSquare solverBoard mines' idx
+                liftIO $ writeIORef currentBoard board'
+                liftIO $ writeIORef count (count' + 1)
+                drawGame board' status canvas gameOver
+        f canvas count currentBoard mines gameOver g
+
 -- Draws the game
 drawGame :: Board -> Status -> Element -> IORef Bool -> UI ()
 drawGame arr status canvas gameOver = do
@@ -170,11 +201,11 @@ drawGame arr status canvas gameOver = do
             liftIO $ writeIORef gameOver True
         WON -> do
             canvas # set' UI.fillStyle (UI.htmlColor "black")
-            canvas # UI.fillRect (fromIntegral canvasSize / 3, fromIntegral canvasSize / 3) (fromIntegral canvasSize / 1.5) (fromIntegral canvasSize / 1.5)
+            canvas # UI.fillRect (fromIntegral canvasSize / 4, fromIntegral canvasSize / 4) (fromIntegral canvasSize / 1.5) (fromIntegral canvasSize / 2)
             canvas # set' UI.fillStyle (UI.htmlColor "white")
             canvas # set' UI.textAlign UI.Center
             canvas # set' UI.textFont "52px sans-serif"
-            canvas # UI.fillText "YOU WON!" ((fromIntegral canvasSize / 1.75), (fromIntegral canvasSize / 2.5))
+            canvas # UI.fillText "YOU LOST" ((fromIntegral canvasSize / 1.75), (fromIntegral canvasSize / 2))
             liftIO $ writeIORef gameOver True
         _ -> return ()
     return ()
