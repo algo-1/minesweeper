@@ -332,15 +332,16 @@ drawSquare
                 (fromIntegral (canvasSize `div` size - 6))
                 (fromIntegral (canvasSize `div` size - 6))
         case count of
-            1 -> canvas # set' UI.fillStyle (UI.htmlColor "#0000ff")
-            2 -> canvas # set' UI.fillStyle (UI.htmlColor "#008100")
-            3 -> canvas # set' UI.fillStyle (UI.htmlColor "#ff1300")
-            4 -> canvas # set' UI.fillStyle (UI.htmlColor "#000083")
-            5 -> canvas # set' UI.fillStyle (UI.htmlColor "#810500")
-            6 -> canvas # set' UI.fillStyle (UI.htmlColor "#2a9494")
-            7 -> canvas # set' UI.fillStyle (UI.htmlColor "#000000")
-            8 -> canvas # set' UI.fillStyle (UI.htmlColor "#808080")
+            1 -> canvas # set' UI.fillStyle (UI.htmlColor "blue")
+            2 -> canvas # set' UI.fillStyle (UI.htmlColor "green")
+            3 -> canvas # set' UI.fillStyle (UI.htmlColor "red")
+            4 -> canvas # set' UI.fillStyle (UI.htmlColor "darkblue")
+            5 -> canvas # set' UI.fillStyle (UI.htmlColor "brown")
+            6 -> canvas # set' UI.fillStyle (UI.htmlColor "cyan")
+            7 -> canvas # set' UI.fillStyle (UI.htmlColor "black")
+            8 -> canvas # set' UI.fillStyle (UI.htmlColor "grey")
             _ -> canvas # set' UI.fillStyle (UI.htmlColor "black")
+
         canvas # set' UI.textAlign (UI.Center)
         canvas # set' UI.textFont "24px sans-serif"
         canvas
