@@ -27,6 +27,7 @@ import System.Random
 canvasSize :: Int
 canvasSize = 480
 
+-- board is n x m, threepenny canvas is j x i
 n :: Int
 n = 16
 
@@ -35,9 +36,6 @@ m = 16
 
 aiStartPos :: Index
 aiStartPos = (16, 1)
-
-size :: Int
-size = n
 
 numMines :: Int
 numMines = 40
@@ -134,9 +132,7 @@ setup g emptyBoard window = do
         mines' <- liftIO $ readIORef mines
         board <- liftIO $ readIORef currentBoard
 
-        -- let idx = (floor (y `div` (canvasSize `div` size)), floor (x `div` (canvasSize `div` size)))
-
-        let idx = (((floor y) `div` (canvasSize `div` size)) + 1, ((floor x) `div` (canvasSize `div` size)) + 1)
+        let idx = (((floor y) `div` (canvasSize `div` n)) + 1, ((floor x) `div` (canvasSize `div` m)) + 1)
 
         case mode of
             0 -> do
@@ -209,11 +205,11 @@ drawSquare
         canvas # set' UI.fillStyle (UI.htmlColor "gray")
         canvas
             # UI.fillRect
-                ( fromIntegral ((j * (canvasSize `div` size) + 3))
-                , fromIntegral ((i * (canvasSize `div` size) + 3))
+                ( fromIntegral ((j * (canvasSize `div` n) + 3))
+                , fromIntegral ((i * (canvasSize `div` m) + 3))
                 )
-                (fromIntegral (canvasSize `div` size - 6))
-                (fromIntegral (canvasSize `div` size - 6))
+                (fromIntegral (canvasSize `div` n - 6))
+                (fromIntegral (canvasSize `div` m - 6))
 drawSquare
     (i, j)
     ( Square
@@ -228,11 +224,11 @@ drawSquare
         canvas # set' UI.fillStyle (UI.htmlColor "green")
         canvas
             # UI.fillRect
-                ( fromIntegral ((j * (canvasSize `div` size) + 3))
-                , fromIntegral ((i * (canvasSize `div` size) + 3))
+                ( fromIntegral ((j * (canvasSize `div` n) + 3))
+                , fromIntegral ((i * (canvasSize `div` m) + 3))
                 )
-                (fromIntegral (canvasSize `div` size - 6))
-                (fromIntegral (canvasSize `div` size - 6))
+                (fromIntegral (canvasSize `div` n - 6))
+                (fromIntegral (canvasSize `div` m - 6))
         canvas # set' UI.fillStyle (UI.htmlColor "white")
         canvas # set' UI.textAlign (UI.Center)
         canvas # set' UI.textFont "32px sans-serif"
@@ -240,9 +236,9 @@ drawSquare
             # UI.fillText
                 ("*")
                 ( fromIntegral
-                    ((j * (canvasSize `div` size)) + ((canvasSize `div` size) `div` 2))
+                    ((j * (canvasSize `div` n)) + ((canvasSize `div` n) `div` 2))
                 , fromIntegral
-                    ((i * (canvasSize `div` size)) + ((canvasSize `div` size) - 6))
+                    ((i * (canvasSize `div` m)) + ((canvasSize `div` m) - 6))
                 )
 drawSquare
     (i, j)
@@ -258,11 +254,11 @@ drawSquare
         canvas # set' UI.fillStyle (UI.htmlColor "green")
         canvas
             # UI.fillRect
-                ( fromIntegral ((j * (canvasSize `div` size) + 3))
-                , fromIntegral ((i * (canvasSize `div` size) + 3))
+                ( fromIntegral ((j * (canvasSize `div` n) + 3))
+                , fromIntegral ((i * (canvasSize `div` m) + 3))
                 )
-                (fromIntegral (canvasSize `div` size - 6))
-                (fromIntegral (canvasSize `div` size - 6))
+                (fromIntegral (canvasSize `div` n - 6))
+                (fromIntegral (canvasSize `div` m - 6))
         canvas # set' UI.fillStyle (UI.htmlColor "white")
         canvas # set' UI.textAlign (UI.Center)
         canvas # set' UI.textFont "32px sans-serif"
@@ -270,9 +266,9 @@ drawSquare
             # UI.fillText
                 ("*")
                 ( fromIntegral
-                    ((j * (canvasSize `div` size)) + ((canvasSize `div` size) `div` 2))
+                    ((j * (canvasSize `div` n)) + ((canvasSize `div` n) `div` 2))
                 , fromIntegral
-                    ((i * (canvasSize `div` size)) + ((canvasSize `div` size) - 6))
+                    ((i * (canvasSize `div` m)) + ((canvasSize `div` m) - 6))
                 )
 drawSquare
     (i, j)
@@ -288,11 +284,11 @@ drawSquare
         canvas # set' UI.fillStyle (UI.htmlColor "red")
         canvas
             # UI.fillRect
-                ( fromIntegral ((j * (canvasSize `div` size) + 3))
-                , fromIntegral ((i * (canvasSize `div` size) + 3))
+                ( fromIntegral ((j * (canvasSize `div` n) + 3))
+                , fromIntegral ((i * (canvasSize `div` m) + 3))
                 )
-                (fromIntegral (canvasSize `div` size - 6))
-                (fromIntegral (canvasSize `div` size - 6))
+                (fromIntegral (canvasSize `div` n - 6))
+                (fromIntegral (canvasSize `div` m - 6))
 drawSquare
     (i, j)
     ( Square
@@ -307,11 +303,11 @@ drawSquare
         canvas # set' UI.fillStyle (UI.htmlColor "white")
         canvas
             # UI.fillRect
-                ( fromIntegral ((j * (canvasSize `div` size) + 3))
-                , fromIntegral ((i * (canvasSize `div` size) + 3))
+                ( fromIntegral ((j * (canvasSize `div` n) + 3))
+                , fromIntegral ((i * (canvasSize `div` m) + 3))
                 )
-                (fromIntegral (canvasSize `div` size - 6))
-                (fromIntegral (canvasSize `div` size - 6))
+                (fromIntegral (canvasSize `div` n - 6))
+                (fromIntegral (canvasSize `div` m - 6))
 drawSquare
     (i, j)
     ( Square
@@ -326,11 +322,11 @@ drawSquare
         canvas # set' UI.fillStyle (UI.htmlColor "white")
         canvas
             # UI.fillRect
-                ( fromIntegral ((j * (canvasSize `div` size) + 3))
-                , fromIntegral ((i * (canvasSize `div` size) + 3))
+                ( fromIntegral ((j * (canvasSize `div` n) + 3))
+                , fromIntegral ((i * (canvasSize `div` m) + 3))
                 )
-                (fromIntegral (canvasSize `div` size - 6))
-                (fromIntegral (canvasSize `div` size - 6))
+                (fromIntegral (canvasSize `div` n - 6))
+                (fromIntegral (canvasSize `div` m - 6))
         case count of
             1 -> canvas # set' UI.fillStyle (UI.htmlColor "blue")
             2 -> canvas # set' UI.fillStyle (UI.htmlColor "green")
@@ -348,7 +344,7 @@ drawSquare
             # UI.fillText
                 (show count)
                 ( fromIntegral
-                    ((j * (canvasSize `div` size)) + ((canvasSize `div` size) `div` 2))
+                    ((j * (canvasSize `div` n)) + ((canvasSize `div` n) `div` 2))
                 , fromIntegral
-                    ((i * (canvasSize `div` size)) + ((canvasSize `div` size) - 10))
+                    ((i * (canvasSize `div` m)) + ((canvasSize `div` m) - 10))
                 )
