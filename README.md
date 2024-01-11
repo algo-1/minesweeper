@@ -42,7 +42,7 @@ Initially, my algorithm for the solver was to
    has a `neighbourMinesCount` = the number of its neighbours that have been flagged by the solver.
 3. if no trivially open flags are found, randomly select a closed square and play there.
 
-My current solver maintains 1 and 2 above but after that, it checks to see if there is a square that the solver has marked safe and plays there, else, it calls the `CSPSolver.` The constraint satisfaction problem is defined as the following,
+The current solver maintains 1 and 2 above but after that, it checks to see if there is a square that the solver has marked safe and plays there, else, it calls the `CSPSolver.` The constraint satisfaction problem is defined as the following,
 
 1. Variables are all unflagged neighbours of numbered squares with a domain of {0, 1}, where 0 represents safe and 1 represents a mine.
 2. Constraints are the sum of variables of a numbered square must equal the number in the numbered square. N-ary (> 2 variables) constraints are binarized using the sum-variable method. I chose to represent the constraints using the data type below
