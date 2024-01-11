@@ -6,6 +6,18 @@
 module Lib (
     generateNewPuzzle,
     runGame,
+    createBoard,
+    defaultSquare,
+    play',
+    solver,
+    printBoard,
+    Index,
+    Board,
+    Move (..),
+    Status (..),
+    Square (..),
+    State (..),
+    Puzzle (..),
 )
 where
 
@@ -609,3 +621,13 @@ runGame puzzleIO = do
         then do
             print "Congratulations! You won with your first move!"
         else loop board mines
+
+data Status = LOST | WON | ONGOING
+play' :: Move -> Board -> HashSet Index -> Index -> (Board, Status)
+play' OpenSquare board mines idx
+    | isFlagged (board ! idx) || state (board ! idx) == Open = (board, ONGOING)
+    | otherwise = case (isMine mines idx) of
+        True -> (play OpenSquare board mines idx, LOST)
+        False ->
+            let board' = play OpenSquare board mines idx in (board', if gameWon board' mines then WON else ONGOING)
+play' ToggleFlag board mines idx = (play ToggleFlag board mines idx, ONGOING)
